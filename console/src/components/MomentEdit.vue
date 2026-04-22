@@ -12,6 +12,7 @@ import DatePicker from "vue-datepicker-next";
 import "vue-datepicker-next/index.css";
 import "vue-datepicker-next/locale/zh-cn.es";
 import SendMoment from "~icons/ic/sharp-send";
+import MingcuteHeartFill from "~icons/mingcute/heart-fill";
 import TablerPhoto from "~icons/tabler/photo";
 
 const TextEditor = defineAsyncComponent({
@@ -58,9 +59,19 @@ const initMoment: Moment = {
   apiVersion: "moment.halo.run/v1alpha1",
 };
 
-onMounted(() => {
+onMounted(async () => {
   if (props.moment) {
     formState.value = cloneDeep(props.moment);
+    // Preload upvote count for display / editing in update mode.
+    try {
+      const counter = await momentsConsoleApiClient.getCounter(
+        props.moment.metadata.name
+      );
+      upvoteInitial.value = counter?.upvote ?? 0;
+      upvoteEdit.value = upvoteInitial.value;
+    } catch (e) {
+      console.error("Failed to fetch moment counter", e);
+    }
   }
 });
 
@@ -69,6 +80,9 @@ const saving = ref<boolean>(false);
 const attachmentSelectorModal = ref(false);
 const isUpdateMode = computed(() => !!formState.value.metadata.creationTimestamp);
 const isEditorEmpty = ref<boolean>(true);
+const upvoteInitial = ref<number>(0);
+const upvoteEdit = ref<number>(0);
+const upvoteChanged = computed(() => upvoteEdit.value !== upvoteInitial.value);
 const handlerCreateOrUpdateMoment = async () => {
   if (saveDisable.value) {
     return;
@@ -130,6 +144,24 @@ const handleUpdate = async () => {
       },
     ],
   });
+
+  // Persist upvote count change separately via Counter endpoint.
+  if (upvoteChanged.value) {
+    const nextUpvote = Number.isFinite(upvoteEdit.value)
+      ? Math.max(0, Math.floor(upvoteEdit.value))
+      : 0;
+    try {
+      await momentsConsoleApiClient.setUpvote(
+        formState.value.metadata.name,
+        nextUpvote
+      );
+      upvoteInitial.value = nextUpvote;
+      upvoteEdit.value = nextUpvote;
+    } catch (e) {
+      console.error("Failed to update upvote count", e);
+      Toast.error("点赞数更新失败");
+    }
+  }
 
   emit("update");
 
@@ -258,7 +290,12 @@ const saveDisabledReason = computed<string | null>(() => {
     const contentChanged = hasContent || hasValidMedium;
     const visibleChanged = oldVisible !== formState.value.spec.visible;
     const releaseTimeChanged = oldReleaseTime !== formState.value.spec.releaseTime;
-    if (!contentChanged && !visibleChanged && !releaseTimeChanged) {
+    if (
+      !contentChanged
+      && !visibleChanged
+      && !releaseTimeChanged
+      && !upvoteChanged.value
+    ) {
       return "未检测到任何修改";
     }
     return null;
@@ -430,6 +467,25 @@ function handleToggleVisible() {
           input-class=":uno: mx-input rounded moment-release-time-input"
           class=":uno: date-picker release-time-picker max-w-[10rem] cursor-pointer"
         />
+        <div
+          v-if="isUpdateMode"
+          v-tooltip="{ content: '点赞数（可手动修改）' }"
+          class=":uno: upvote-edit inline-flex h-7 items-center gap-1 rounded border bg-gray-50 px-2 text-xs text-gray-600 focus-within:border-sky-500 w-40"
+          :class="upvoteChanged ? ':uno: border-sky-500 bg-sky-50' : ''"
+        >
+          <MingcuteHeartFill
+            class=":uno: text-sm"
+            :class="upvoteChanged ? ':uno: text-red-500' : ':uno: text-gray-400'"
+          />
+          <input
+            v-model.number="upvoteEdit"
+            type="number"
+            min="0"
+            step="1"
+            class=":uno: w-12 border-0 bg-transparent text-xs outline-none"
+            @keydown.stop
+          />
+        </div>
       </div>
 
       <div class=":uno: flex items-center space-x-2.5">

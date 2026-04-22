@@ -3,7 +3,7 @@ import { momentsConsoleApiClient } from "@/api";
 import FilterDropdown from "@/components/FilterDropdown.vue";
 import MomentEdit from "@/components/MomentEdit.vue";
 import MomentItem from "@/components/MomentItem.vue";
-import TagFilterDropdown from "@/components/TagFilterDropdown.vue";
+import PinnedMomentsModal from "@/components/PinnedMomentsModal.vue";
 import { usePluginShikiScriptLoader } from "@/plugin-supports/shiki/use-plugin-shiki-script-loader";
 import {
   Dialog,
@@ -25,9 +25,13 @@ import "vue-datepicker-next/locale/zh-cn.es";
 import MingcuteCloseFill from "~icons/mingcute/close-fill";
 import MingcuteDownloadLine from "~icons/mingcute/download-line";
 import MingcuteMomentsLine from "~icons/mingcute/moment-line";
+import MingcutePin2Fill from "~icons/mingcute/pin-2-fill";
 
 const queryClient = useQueryClient();
 
+// Tag filter in the main list is deprecated in plugin-moments-pro: tags are
+// auto-extracted from content and seldom selected explicitly in the admin list.
+// We still support deep-linking by keeping the route query, but the dropdown is hidden.
 const tag = useRouteQuery<string>("tag");
 const selectedApprovedStatus = useRouteQuery<string | undefined, boolean | undefined>(
   "approved",
@@ -126,6 +130,10 @@ const {
       endDate: endDate.value,
       tag: tag.value,
       sort: selectedSort.value ? [selectedSort.value] : [DEFAULT_SORT],
+      // Exclude pinned moments from the main list; they are managed from
+      // the dedicated "置顶管理" modal to avoid clutter.
+      // @ts-expect-error - pinned is a new query param not yet regenerated in the API client.
+      pinned: false,
     });
 
     total.value = data.total;
@@ -180,6 +188,32 @@ watch([tag, selectedApprovedStatus, momentsRangeTime, selectedSort], () => {
 const handleJumpToFrontDesk = () => {
   window.open("/moments", "_blank");
 };
+
+// --- pinned management modal ---
+const pinnedModalVisible = ref(false);
+
+const { data: pinnedCount } = useQuery({
+  queryKey: ["plugin:moments:pinned-count"],
+  queryFn: async () => {
+    const { data } = await momentsConsoleApiClient.moment.listMoments({
+      page: 1,
+      size: 1,
+      // @ts-expect-error - new param
+      pinned: true,
+    });
+    return data.total;
+  },
+  refetchOnWindowFocus: false,
+});
+
+function openPinnedModal() {
+  pinnedModalVisible.value = true;
+}
+
+function onPinnedChanged() {
+  queryClient.invalidateQueries({ queryKey: ["plugin:moments:list"] });
+  queryClient.invalidateQueries({ queryKey: ["plugin:moments:pinned-count"] });
+}
 
 // --- batch actions ---
 const refreshAndClear = () => {
@@ -259,6 +293,18 @@ usePluginShikiScriptLoader();
       <MingcuteMomentsLine />
     </template>
     <template #actions>
+      <VButton @click="openPinnedModal">
+        <template #icon>
+          <MingcutePin2Fill class=":uno: size-full" />
+        </template>
+        置顶管理
+        <span
+          v-if="pinnedCount && pinnedCount > 0"
+          class=":uno: ml-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-amber-100 px-1.5 text-xs font-semibold text-amber-700"
+        >
+          {{ pinnedCount }}
+        </span>
+      </VButton>
       <VButton @click="exportJson">
         <template #icon>
           <MingcuteDownloadLine class=":uno: size-full" />
@@ -284,7 +330,6 @@ usePluginShikiScriptLoader();
         >
           <div class=":uno: flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
             <div class=":uno: flex flex-wrap items-center gap-2">
-              <TagFilterDropdown v-model="tag" :label="'标签'"></TagFilterDropdown>
               <FilterDropdown
                 v-model="selectedApprovedStatus"
                 label="状态"
@@ -427,6 +472,7 @@ usePluginShikiScriptLoader();
       </div>
     </div>
   </VCard>
+  <PinnedMomentsModal v-model:visible="pinnedModalVisible" @change="onPinnedChanged" />
 </template>
 <style lang="scss">
 .date-picker {

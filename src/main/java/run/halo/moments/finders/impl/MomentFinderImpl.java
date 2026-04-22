@@ -72,7 +72,13 @@ public class MomentFinderImpl implements MomentFinder {
     }
 
     static Sort defaultSort() {
-        return Sort.by("spec.releaseTime").descending()
+        // Pinned moments always float to the top, followed by pinOrder desc,
+        // then release time desc.
+        return Sort.by(
+                Sort.Order.desc("spec.pinned"),
+                Sort.Order.desc("spec.pinOrder"),
+                Sort.Order.desc("spec.releaseTime")
+            )
             .and(ExtensionUtil.defaultSort());
     }
 

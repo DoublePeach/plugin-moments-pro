@@ -76,6 +76,11 @@ public class MomentQuery extends SortableRequest {
         return Moment.MomentVisible.from(visible);
     }
 
+    @Schema(description = "Filter by pinned status. true / false / null (no filter)")
+    public Boolean getPinned() {
+        return convertBooleanOrNull(queryParams.getFirst("pinned"));
+    }
+
     @Schema
     public Instant getStartDate() {
         String startDate = queryParams.getFirst("startDate");
@@ -109,6 +114,10 @@ public class MomentQuery extends SortableRequest {
 
         if (getApproved() != null) {
             query = and(query, equal("spec.approved", Boolean.toString(getApproved())));
+        }
+
+        if (getPinned() != null) {
+            query = and(query, equal("spec.pinned", Boolean.toString(getPinned())));
         }
 
         if (getStartDate() != null) {
@@ -198,6 +207,12 @@ public class MomentQuery extends SortableRequest {
                 .in(ParameterIn.QUERY)
                 .name("approved")
                 .description("Moment approved.")
+                .implementation(Boolean.class)
+                .required(false))
+            .parameter(parameterBuilder()
+                .in(ParameterIn.QUERY)
+                .name("pinned")
+                .description("Whether the moment is pinned. Omit to fetch all.")
                 .implementation(Boolean.class)
                 .required(false))
         ;
