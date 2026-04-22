@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { momentsUcApiClient } from "@/api";
+import FilterDropdown from "@/components/FilterDropdown.vue";
 import { usePluginShikiScriptLoader } from "@/plugin-supports/shiki/use-plugin-shiki-script-loader";
 import { VCard, VLoading, VPageHeader, VPagination } from "@halo-dev/components";
 import { utils } from "@halo-dev/ui-shared";
@@ -14,32 +15,6 @@ import MomentEdit from "./MomentEdit.vue";
 import MomentItem from "./MomentItem.vue";
 import TagFilterDropdown from "./TagFilterDropdown.vue";
 
-interface VisibleItem {
-  label: string;
-  value?: "PUBLIC" | "PRIVATE";
-}
-
-interface SortItem {
-  label: string;
-  sort: "RELEASE_TIME";
-  sortOrder: boolean;
-}
-
-const VisibleItems: VisibleItem[] = [
-  {
-    label: "全部",
-    value: undefined,
-  },
-  {
-    label: "公开",
-    value: "PUBLIC",
-  },
-  {
-    label: "私有",
-    value: "PRIVATE",
-  },
-];
-
 const tag = useRouteQuery<string>("tag");
 
 const page = ref(1);
@@ -49,8 +24,21 @@ const totalPages = ref(1);
 const hasPrevious = ref(false);
 const hasNext = ref(false);
 
-const selectedVisibleItem = ref<VisibleItem>(VisibleItems[0]);
-const selectedSortItem = ref<SortItem>();
+const selectedVisible = useRouteQuery<"PUBLIC" | "PRIVATE" | undefined>("visible");
+const visibleItems = [
+  { label: "公开", value: "PUBLIC" },
+  { label: "私有", value: "PRIVATE" },
+];
+
+const DEFAULT_SORT = "spec.releaseTime,desc";
+const selectedSort = useRouteQuery<string>("sort", DEFAULT_SORT);
+const sortItems = [
+  { label: "发布时间 ↓", value: "spec.releaseTime,desc" },
+  { label: "发布时间 ↑", value: "spec.releaseTime,asc" },
+  { label: "创建时间 ↓", value: "metadata.creationTimestamp,desc" },
+  { label: "创建时间 ↑", value: "metadata.creationTimestamp,asc" },
+];
+
 const keyword = ref("");
 const momentsRangeTime = ref<Array<Date>>([]);
 
@@ -78,8 +66,8 @@ const {
     "plugin:moments:list",
     page,
     size,
-    selectedVisibleItem,
-    selectedSortItem,
+    selectedVisible,
+    selectedSort,
     startDate,
     endDate,
     keyword,
@@ -90,12 +78,13 @@ const {
       page: page.value,
       size: size.value,
       // @unocss-skip-start
-      visible: selectedVisibleItem.value?.value,
+      visible: selectedVisible.value,
       // @unocss-skip-end
       keyword: keyword.value,
       startDate: startDate.value,
       endDate: endDate.value,
       tag: tag.value,
+      sort: selectedSort.value ? [selectedSort.value] : [DEFAULT_SORT],
     });
 
     total.value = data.total;
@@ -122,7 +111,7 @@ provide("tag", {
   updateTagQuery,
 });
 
-watch([tag, momentsRangeTime], () => {
+watch([tag, momentsRangeTime, selectedVisible, selectedSort], () => {
   page.value = 1;
   size.value = 20;
   refetch();
@@ -143,8 +132,10 @@ usePluginShikiScriptLoader();
 
         <div class=":uno: moment-header pb-2 pt-8">
           <div class=":uno: flex flex-col justify-between sm:flex-row space-x-2">
-            <div class=":uno: left-0 mb-2 mr-2 flex items-center sm:mb-0">
+            <div class=":uno: left-0 mb-2 mr-2 flex flex-wrap items-center sm:mb-0 gap-2">
               <TagFilterDropdown v-model="tag" :label="'标签'"></TagFilterDropdown>
+              <FilterDropdown v-model="selectedVisible" label="可见性" :items="visibleItems" />
+              <FilterDropdown v-model="selectedSort" label="排序" :items="sortItems" />
             </div>
 
             <div class=":uno: right-0 flex !ml-0">

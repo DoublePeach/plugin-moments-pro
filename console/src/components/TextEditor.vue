@@ -33,6 +33,7 @@ const emit = defineEmits<{
   (event: "update:html", value: string): void;
   (event: "update", value: string): void;
   (event: "update:isEmpty", value: boolean | undefined): void;
+  (event: "submit"): void;
 }>();
 
 const editor = shallowRef<VueEditor>();
@@ -96,6 +97,16 @@ onMounted(async () => {
         customExtensions: [...customExtensions, ...extensionsFromPlugins],
       }),
     ],
+    editorProps: {
+      handleKeyDown: (_view, event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+          event.preventDefault();
+          emit("submit");
+          return true;
+        }
+        return false;
+      },
+    },
     autofocus: "end",
     onUpdate: () => {
       emit("update:raw", editor.value?.getHTML() + "");

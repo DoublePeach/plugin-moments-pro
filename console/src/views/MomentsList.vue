@@ -43,6 +43,15 @@ const hasNext = ref(false);
 const keyword = ref("");
 const momentsRangeTime = ref<Array<Date>>([]);
 
+const DEFAULT_SORT = "spec.releaseTime,desc";
+const selectedSort = useRouteQuery<string>("sort", DEFAULT_SORT);
+const sortItems = [
+  { label: "发布时间 ↓", value: "spec.releaseTime,desc" },
+  { label: "发布时间 ↑", value: "spec.releaseTime,asc" },
+  { label: "创建时间 ↓", value: "metadata.creationTimestamp,desc" },
+  { label: "创建时间 ↑", value: "metadata.creationTimestamp,asc" },
+];
+
 const startDate = computed(() => {
   const date: Date = momentsRangeTime.value[0];
 
@@ -76,6 +85,7 @@ const {
     endDate,
     keyword,
     tag,
+    selectedSort,
   ],
   queryFn: async () => {
     const { data } = await momentsConsoleApiClient.moment.listMoments({
@@ -86,6 +96,7 @@ const {
       startDate: startDate.value,
       endDate: endDate.value,
       tag: tag.value,
+      sort: selectedSort.value ? [selectedSort.value] : [DEFAULT_SORT],
     });
 
     total.value = data.total;
@@ -112,7 +123,7 @@ provide("tag", {
   updateTagQuery,
 });
 
-watch([tag, selectedApprovedStatus, momentsRangeTime], () => {
+watch([tag, selectedApprovedStatus, momentsRangeTime, selectedSort], () => {
   page.value = 1;
   size.value = 20;
   refetch();
@@ -145,7 +156,7 @@ usePluginShikiScriptLoader();
 
         <div class=":uno: moment-header pb-2 pt-8">
           <div class=":uno: flex flex-col justify-between sm:flex-row space-x-2">
-            <div class=":uno: left-0 mb-2 mr-2 flex items-center sm:mb-0 space-x-2">
+            <div class=":uno: left-0 mb-2 mr-2 flex flex-wrap items-center sm:mb-0 gap-2">
               <TagFilterDropdown v-model="tag" :label="'标签'"></TagFilterDropdown>
               <FilterDropdown
                 v-model="selectedApprovedStatus"
@@ -164,6 +175,7 @@ usePluginShikiScriptLoader();
                   },
                 ]"
               />
+              <FilterDropdown v-model="selectedSort" label="排序" :items="sortItems" />
             </div>
 
             <div class=":uno: right-0 flex !ml-0">

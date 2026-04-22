@@ -1,72 +1,96 @@
-# plugin-moments
+# plugin-moments-pro
 
-Halo 2.0 的瞬间管理插件，提供一个轻量级的内容发布功能，支持发布图文、视频、音频等内容。
+> **Halo 瞬间插件增强版（Enhanced Moments Plugin for [Halo](https://halo.run)）**
+>
+> 基于官方 [halo-sigs/plugin-moments](https://github.com/halo-sigs/plugin-moments) 二次开发，面向高频使用者与独立博客主，在原版「轻量图文动态」之上带来更顺手的后台编辑、更强的列表操控与更友好的发布时间管理。
+
+如果这个项目对你有帮助，欢迎点一个 **⭐ Star**，这是对作者持续维护的最大鼓励！
+
+---
+
+## ✨ 相较官方版的增强点
+
+| 能力 | 官方版 | `plugin-moments-pro` |
+| --- | --- | --- |
+| 发布时间 | 只能由系统在创建时自动写入，事后无法修改 | ✅ 新建/编辑均可自定义「发布时间」（精确到分钟） |
+| 快捷时间选择 | ❌ | ✅ 内置「此刻 / 一小时后 / 今晚 20:00 / 明天此刻」快捷按钮 |
+| 列表默认排序 | 固定按 `metadata.creationTimestamp` | ✅ 默认按 `spec.releaseTime` 降序，支持 UI 一键切换 |
+| 列表排序选项 | ❌ | ✅ 支持按「发布时间 / 创建时间 × 升降序」切换，URL 可分享 |
+| 用户中心（UC）过滤 | 仅按标签与时间 | ✅ 追加「可见性」「排序」筛选 |
+| 保存按钮 | 灰色禁用、无提示 | ✅ 悬浮气泡明确告知禁用原因（内容为空 / 未修改 / 附件超限） |
+| `Ctrl+Enter` 提交 | 偶发不响应 | ✅ 基于 tiptap `editorProps.handleKeyDown` 注册，稳定触发；`⌘+Enter` 同样支持 |
+| 编辑时 patch 字段 | 不包含 `releaseTime` | ✅ 编辑时把 `releaseTime` 一并下发，改时间即可"补发"动态 |
+
+> 还有更多改进持续加入中，见 [CHANGELOG](#-更新日志) 或关注本仓库。
 
 ![Preview](./images/plugin-moments-preview.png)
 
-## 使用方式
+---
 
-1. 下载，目前提供以下两个下载方式：
-    - Halo 应用市场：<https://halo.run/store/apps/app-SnwWD>
-    - GitHub Releases：访问 [Releases](https://github.com/halo-sigs/plugin-moments/releases) 下载 Assets 中的 JAR 文件。
-2. 安装，插件安装和更新方式可参考：<https://docs.halo.run/user-guide/plugins>
-3. 安装完成之后，访问 Console 左侧的**瞬间**菜单项，即可进行管理。
-4. 前台访问地址为 `/moments`，需要注意的是，此插件需要主题提供模板（moments.html）才能访问 `/moments`。
-5. 此插件也提供了 RSS 订阅的路由，可以访问 `/moments/rss.xml`。
-6. 此插件将数据同步至 Halo 搜索，type 为 `moment.moment.halo.run`。
+## 🎯 适用场景
 
-## 开发环境
+- **独立博客 / 个人站**：把碎碎念、读书随笔、探店打卡做成类微博的时间线
+- **团队小社区**：记录项目进展、产品日志、发版动态
+- **数字花园 / Digital Garden**：补录历史内容时能自由指定"发布时间"，保持时间线连贯
+- **自托管替代方案**：不想把内容发在微博/Twitter/即刻上，又想拥有同款"瞬间"体验
 
-插件开发的详细文档请查阅：<https://docs.halo.run/developer-guide/plugin/introduction>
+插件能力一览：
+
+1. 富文本编辑器，支持图文、视频、音频、标签（`#话题`）、代码高亮（配合 Shiki 插件）
+2. 公开 / 私有可见性控制，支持后台先审后发
+3. 前台 `/moments` 路由 + 详情页 + RSS 订阅（`/moments/rss.xml`）
+4. 接入 Halo 全站搜索（type：`moment.moment.halo.run`）
+5. 用户中心（UC）支持普通用户自行发布、管理自己的瞬间
+6. 评论通知、Reconciler 异步处理、Finder API，适合主题开发者二次集成
+
+---
+
+## 🚀 使用方式
+
+1. 下载插件 JAR，方式二选一：
+    - **GitHub Releases**：本仓库 [Releases](https://github.com/DoublePeach/plugin-moments-pro/releases) 页面下载最新 `plugin-moments-x.x.x.jar`
+    - （可选）Halo 应用市场官方版：<https://halo.run/store/apps/app-SnwWD>（非本增强版）
+2. 在 Halo 后台「插件」页面上传安装，插件管理详见：<https://docs.halo.run/user-guide/plugins>
+3. 启用后，左侧菜单会出现 **瞬间**，点击即可管理
+4. 前台访问地址 `/moments`，需主题提供 `moments.html` 模板
+5. RSS 订阅地址 `/moments/rss.xml`
+6. 数据会同步至 Halo 搜索，类型为 `moment.moment.halo.run`
+
+---
+
+## 🛠 开发环境
+
+插件开发详细文档：<https://docs.halo.run/developer-guide/plugin/introduction>
 
 所需环境：
 
 1. Java 17
 2. Node 18
 3. pnpm 8
-4. Docker (可选)
+4. Docker（可选，推荐）
 
 克隆项目：
 
 ```bash
-git clone git@github.com:halo-sigs/plugin-moments.git
-
-# 或者当你 fork 之后
-
-git clone git@github.com:{your_github_id}/plugin-moments.git
+git clone https://github.com/DoublePeach/plugin-moments-pro.git
+cd plugin-moments-pro
 ```
 
-```bash
-cd path/to/plugin-moments
-```
-
-### 运行方式 1（推荐）
-
-> 此方式需要本地安装 Docker
+### 运行方式 1（推荐，依赖 Docker）
 
 ```bash
 # macOS / Linux
 ./gradlew pnpmInstall
-
-# Windows
-./gradlew.bat pnpmInstall
-```
-
-```bash
-# macOS / Linux
 ./gradlew haloServer
 
 # Windows
+./gradlew.bat pnpmInstall
 ./gradlew.bat haloServer
 ```
 
-执行此命令后，会自动创建一个 Halo 的 Docker 容器并加载当前的插件，更多文档可查阅：<https://docs.halo.run/developer-guide/plugin/basics/devtools>
+执行后会自动拉起一个 Halo 的 Docker 容器并加载当前插件，文档参考：<https://docs.halo.run/developer-guide/plugin/basics/devtools>
 
-### 运行方式 2
-
-> 此方式需要使用源码运行 Halo
-
-编译插件：
+### 运行方式 2（源码运行 Halo）
 
 ```bash
 # macOS / Linux
@@ -76,19 +100,38 @@ cd path/to/plugin-moments
 ./gradlew.bat build
 ```
 
-修改 Halo 配置文件：
+在 Halo 配置中启用本地插件路径：
 
 ```yaml
 halo:
     plugin:
         runtime-mode: development
         fixedPluginPath:
-            - "/path/to/plugin-moments"
+            - "/path/to/plugin-moments-pro"
 ```
 
-最后重启 Halo 项目即可。
+然后重启 Halo 即可。
 
-## 公开 API
+---
+
+## 📝 更新日志
+
+### Pro 版本增量（基于官方 `main`）
+
+- **列表与编辑体验**
+  - 新建/编辑 瞬间时支持选择「发布时间」（datetime，精确到分钟）
+  - 列表支持排序下拉（发布时间 / 创建时间 × 升降序），URL 可分享
+  - 列表默认按 `spec.releaseTime` 降序展示
+  - 保存按钮在禁用时显示原因气泡
+  - `Ctrl+Enter` / `⌘+Enter` 通过 tiptap keymap 注册，稳定触发提交
+  - 发布时间选择器内置快捷项（此刻 / 一小时后 / 今晚 20:00 / 明天此刻）
+- **UC（用户中心）**
+  - 补齐「可见性」「排序」筛选条件
+  - 编辑自己的瞬间时同样支持修改发布时间
+
+---
+
+## 📡 公开 API
 
 ### 查询瞬间列表
 
@@ -96,15 +139,15 @@ halo:
 
 **参数**：
 
-1. page: int - 分页页码，从 1 开始
-2. size: int - 分页条数
-3. tag:string - 标签
-4. ownerName:string - 创建者用户名 name
-5. startDate:string - 开始时间 通过时间区间筛选发布时间
-6. endDate:string - 结束时间
-7. sort:string[] - 排序字段，格式为 字段名,排序方式，排序方式可选值为 asc 或 desc，如 spec.releaseTime,desc，
+1. `page: int` - 分页页码，从 1 开始
+2. `size: int` - 分页条数
+3. `tag: string` - 标签
+4. `ownerName: string` - 创建者用户名 name
+5. `startDate: string` - 开始时间，通过时间区间筛选发布时间
+6. `endDate: string` - 结束时间
+7. `sort: string[]` - 排序字段，格式为 `字段名,排序方式`，如 `spec.releaseTime,desc`
 
-**返回值类型**：[ListResult\<MomentVo>](#listresult-momentvo)
+**返回值类型**：[ListResult\<MomentVo\>](#listresultmomentvo)
 
 ### 查询瞬间详情
 
@@ -112,29 +155,31 @@ halo:
 
 **参数**：
 
-1. name:string - 瞬间的唯一标识 name
+1. `name: string` - 瞬间的唯一标识 name
 
-**返回值类型**：[#MomentVo](#momentvo)
+**返回值类型**：[MomentVo](#momentvo)
 
-## 主题适配
+---
+
+## 🎨 主题适配
 
 目前此插件为主题端提供了 `/moments` 路由，模板为 `moments.html`，也提供了 [Finder API](https://docs.halo.run/developer-guide/theme/finder-apis)，可以将瞬间列表渲染到任何地方。
 
 ### 模板变量
 
-#### 列表页面 /moments
+#### 列表页面 `/moments`
 
-- 模板路径：/templates/moments.html
-- 访问路径：/moments?tag={tag} | moments/page/{page}?tag={tag}
+- 模板路径：`/templates/moments.html`
+- 访问路径：`/moments?tag={tag}` | `moments/page/{page}?tag={tag}`
 
 **参数**：
 
-- tag：标签名称，用于筛选。
+- `tag`：标签名称，用于筛选
 
 **变量**：
 
-- moments：[#UrlContextListResult\<MomentVo>](#urlcontextlistresult-momentvo)
-- tags：[#List\<MomentTagVo>](#momenttagvo)
+- `moments`：[UrlContextListResult\<MomentVo\>](#urlcontextlistresultmomentvo)
+- `tags`：[List\<MomentTagVo\>](#momenttagvo)
 
 **示例**：
 
@@ -176,14 +221,14 @@ halo:
 </div>
 ```
 
-#### 详情页面 /moments/{name}
+#### 详情页面 `/moments/{name}`
 
-- 模板路径：/templates/moment.html
-- 访问路径：/moments/{name}
+- 模板路径：`/templates/moment.html`
+- 访问路径：`/moments/{name}`
 
 **变量**：
 
-- moment：[#MomentVo](#momentvo)
+- `moment`：[MomentVo](#momentvo)
 
 **示例**：
 
@@ -204,15 +249,15 @@ halo:
 
 **变量**：
 
-- type: moment.moment.halo.run
+- `type: moment.moment.halo.run`
 
 ### Finder API
 
-#### listAll()
+#### `listAll()`
 
 获取全部瞬间内容。
 
-**返回值类型**：List<[#MomentVo](#momentvo)>
+**返回值类型**：`List<`[MomentVo](#momentvo)`>`
 
 **示例**：
 
@@ -229,7 +274,7 @@ halo:
 </ul>
 ```
 
-#### list({...})
+#### `list({...})`
 
 ```html
 momentFinder.list({
@@ -245,13 +290,13 @@ momentFinder.list({
 
 **参数**：
 
-1. page: int - 分页页码，从 1 开始
-2. size: int - 分页条数
-3. tagName:string - 标签
-4. owner:string - 创建者用户名 name
-5. sort:string[] - 排序字段，格式为 字段名,排序方式，排序方式可选值为 asc 或 desc，如 spec.releaseTime,desc，传递时需要使用 {} 形式并用逗号分隔表示数组。
+1. `page: int` - 分页页码，从 1 开始
+2. `size: int` - 分页条数
+3. `tagName: string` - 标签
+4. `owner: string` - 创建者用户名 name
+5. `sort: string[]` - 排序字段，格式为 `字段名,排序方式`，传递时需要使用 `{}` 形式并用逗号分隔表示数组
 
-**返回值类型**：[ListResult\<MomentVo>](#listresult-momentvo)
+**返回值类型**：[ListResult\<MomentVo\>](#listresultmomentvo)
 
 **示例**：
 
@@ -279,7 +324,7 @@ momentFinder.list({
 </th:block>
 ```
 
-#### list(page, size)
+#### `list(page, size)`
 
 根据分页参数获取瞬间列表。
 
@@ -288,7 +333,7 @@ momentFinder.list({
 1. `page: int` - 分页页码，从 1 开始
 2. `size: int` - 分页条数
 
-**返回值类型**：[ListResult\<MomentVo>](#listresult-momentvo)
+**返回值类型**：[ListResult\<MomentVo\>](#listresultmomentvo)
 
 **示例**：
 
@@ -317,43 +362,42 @@ momentFinder.list({
 ```json
 {
     "metadata": {
-        "name": "string", // 唯一标识
+        "name": "string",
         "labels": {
             "additionalProp1": "string"
         },
         "annotations": {
             "additionalProp1": "string"
         },
-        "creationTimestamp": "2022-11-20T13:06:38.512Z" // 创建时间
+        "creationTimestamp": "2022-11-20T13:06:38.512Z"
     },
     "spec": {
         "content": {
-            "raw": "string", // 原始内容，一般用于编辑器使用
-            "html": "string", // HTML 内容，用于主题端进行最终渲染的内容
+            "raw": "string",
+            "html": "string",
             "medium": [
-                // 媒体内容
                 {
-                    "type": "#MomentMediaType", // 类型
-                    "url": "string", // 链接
-                    "originType": "string" // 原始类型，例如：image/jpeg
+                    "type": "#MomentMediaType",
+                    "url": "string",
+                    "originType": "string"
                 }
             ]
         },
-        "releaseTime": "string", // 发布时间
-        "visible": "PUBLIC", // 可见性
-        "owner": "string", // 所属用户
-        "tags": ["string"] // 所拥有的标签
+        "releaseTime": "string",
+        "visible": "PUBLIC",
+        "owner": "string",
+        "tags": ["string"]
     },
     "owner": {
-        "name": "string", // 用户名
-        "avatar": "string", // 头像
-        "bio": "string", // 描述
-        "displayName": "string" // 显示名称
+        "name": "string",
+        "avatar": "string",
+        "bio": "string",
+        "displayName": "string"
     },
     "stats": {
-        "upvote": 0, // 点赞数
-        "totalComment": 0, // 评论数
-        "approvedComment": 0 // 审核通过的评论数
+        "upvote": 0,
+        "totalComment": 0,
+        "approvedComment": 0
     }
 }
 ```
@@ -362,44 +406,44 @@ momentFinder.list({
 
 ```java
 enum Target {
-  PHOTO,                                     // 图片
-  VIDEO,                                     // 视频
-  POST,                                      // 文章
-  AUDIO;                                     // 音频
+  PHOTO,   // 图片
+  VIDEO,   // 视频
+  POST,    // 文章
+  AUDIO;   // 音频
 }
 ```
 
-#### ListResult<MomentVo>
+#### ListResult&lt;MomentVo&gt;
 
 ```json
 {
-    "page": 0, // 当前页码
-    "size": 0, // 每页条数
-    "total": 0, // 总条数
-    "items": "List<#MomentVo>", // 瞬间列表数据
-    "first": true, // 是否为第一页
-    "last": true, // 是否为最后一页
-    "hasNext": true, // 是否有下一页
-    "hasPrevious": true, // 是否有上一页
-    "totalPages": 0 // 总页数
+    "page": 0,
+    "size": 0,
+    "total": 0,
+    "items": "List<#MomentVo>",
+    "first": true,
+    "last": true,
+    "hasNext": true,
+    "hasPrevious": true,
+    "totalPages": 0
 }
 ```
 
-#### UrlContextListResult<MomentVo>
+#### UrlContextListResult&lt;MomentVo&gt;
 
 ```json
 {
-    "page": 0, // 当前页码
-    "size": 0, // 每页条数
-    "total": 0, // 总条数
-    "items": "List<#MomentVo>", // 瞬间列表数据
-    "first": true, // 是否为第一页
-    "last": true, // 是否为最后一页
-    "hasNext": true, // 是否有下一页
-    "hasPrevious": true, // 是否有上一页
-    "totalPages": 0, // 总页数
-    "prevUrl": "string", // 上一页链接
-    "nextUrl": "string" // 下一页链接
+    "page": 0,
+    "size": 0,
+    "total": 0,
+    "items": "List<#MomentVo>",
+    "first": true,
+    "last": true,
+    "hasNext": true,
+    "hasPrevious": true,
+    "totalPages": 0,
+    "prevUrl": "string",
+    "nextUrl": "string"
 }
 ```
 
@@ -407,8 +451,23 @@ enum Target {
 
 ```json
 {
-    "name": "string", // 标签名称
-    "permalink": "string", // 标签链接
-    "momentCount": 0 // 标签所属的 moment 数量
+    "name": "string",
+    "permalink": "string",
+    "momentCount": 0
 }
 ```
+
+---
+
+## 🤝 参与贡献
+
+欢迎通过 Issue 和 Pull Request 参与共建：
+
+- 上游仓库（官方原版）：<https://github.com/halo-sigs/plugin-moments>
+- 本增强版：<https://github.com/DoublePeach/plugin-moments-pro>
+
+提 Issue 前请先确认是否在官方原版也存在；如果是本项目新增能力相关，请带上复现步骤与环境信息，非常感谢！
+
+## 📄 License
+
+沿用上游项目的 [GPL-3.0 License](./LICENSE)。

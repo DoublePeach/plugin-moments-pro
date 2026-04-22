@@ -223,28 +223,40 @@ const onAttachmentsSelect = async (attachments: AttachmentLike[]) => {
   });
 };
 
-const saveDisable = computed(() => {
-  let medium = formState.value.spec.content.medium;
-  if (medium !== undefined && medium.length > 0 && medium.length <= 9) {
-    return false;
-  }
-  if (!isEditorEmpty.value) {
-    return false;
+const saveDisabledReason = computed<string | null>(() => {
+  const medium = formState.value.spec.content.medium;
+  const hasValidMedium = !!medium && medium.length > 0 && medium.length <= 9;
+  const hasContent = !isEditorEmpty.value;
+
+  if (!hasValidMedium && !hasContent) {
+    if (medium && medium.length > 9) {
+      return `附件数量超过上限（${medium.length}/9）`;
+    }
+    if (!isUpdateMode.value) {
+      return "请先填写内容或添加附件";
+    }
   }
 
   if (isUpdateMode.value) {
-    let oldVisible = props.moment?.spec.visible;
-    if (oldVisible != formState.value.spec.visible) {
-      return false;
+    const oldVisible = props.moment?.spec.visible;
+    const oldReleaseTime = props.moment?.spec.releaseTime;
+    const contentChanged = hasContent || hasValidMedium;
+    const visibleChanged = oldVisible !== formState.value.spec.visible;
+    const releaseTimeChanged = oldReleaseTime !== formState.value.spec.releaseTime;
+    if (!contentChanged && !visibleChanged && !releaseTimeChanged) {
+      return "未检测到任何修改";
     }
-    let oldReleaseTime = props.moment?.spec.releaseTime;
-    if (oldReleaseTime != formState.value.spec.releaseTime) {
-      return false;
-    }
+    return null;
   }
 
-  return true;
+  if (!hasContent && !hasValidMedium) {
+    return "请先填写内容或添加附件";
+  }
+
+  return null;
 });
+
+const saveDisable = computed(() => saveDisabledReason.value !== null);
 
 const releaseTimeDate = computed<Date | null>({
   get: () =>
@@ -253,6 +265,37 @@ const releaseTimeDate = computed<Date | null>({
     formState.value.spec.releaseTime = val ? val.toISOString() : new Date().toISOString();
   },
 });
+
+const releaseTimeShortcuts = [
+  {
+    text: "此刻",
+    onClick: () => new Date(),
+  },
+  {
+    text: "一小时后",
+    onClick: () => {
+      const d = new Date();
+      d.setHours(d.getHours() + 1);
+      return d;
+    },
+  },
+  {
+    text: "今晚 20:00",
+    onClick: () => {
+      const d = new Date();
+      d.setHours(20, 0, 0, 0);
+      return d;
+    },
+  },
+  {
+    text: "明天此刻",
+    onClick: () => {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      return d;
+    },
+  },
+];
 
 const removeMedium = (media: MomentMedia) => {
   let formMedium = formState.value.spec.content.medium;
@@ -303,13 +346,6 @@ function handleToggleVisible() {
   // @unocss-skip-end
   formState.value.spec.visible = currentVisible === "PUBLIC" ? "PRIVATE" : "PUBLIC";
 }
-
-function handleKeydown(event: KeyboardEvent) {
-  if (event.ctrlKey && event.key === "Enter") {
-    handlerCreateOrUpdateMoment();
-    return false;
-  }
-}
 </script>
 
 <template>
@@ -329,7 +365,7 @@ function handleKeydown(event: KeyboardEvent) {
       :tag-query-fetch="useUCTagQueryFetch"
       class=":uno: min-h-[9rem]"
       tabindex="-1"
-      @keydown="handleKeydown"
+      @submit="handlerCreateOrUpdateMoment"
     />
     <div v-if="formState.spec.content.medium?.length" class=":uno: img-box flex px-3.5 py-2">
       <ul class=":uno: grid grid-cols-3 w-full gap-1.5 sm:w-1/2" role="list">
@@ -360,6 +396,7 @@ function handleKeydown(event: KeyboardEvent) {
           :show-second="false"
           :editable="false"
           :clearable="false"
+          :shortcuts="releaseTimeShortcuts"
           placeholder="发布时间"
           input-class=":uno: mx-input rounded moment-release-time-input"
           class=":uno: date-picker release-time-picker max-w-[11rem] cursor-pointer"
@@ -397,7 +434,11 @@ function handleKeydown(event: KeyboardEvent) {
           <span class=":uno: text-xs"> 取消 </span>
         </button>
 
-        <div v-permission="['uc:plugin:moments:publish']" class=":uno: h-fit">
+        <div
+          v-permission="['uc:plugin:moments:publish']"
+          v-tooltip="saveDisabledReason ? { content: saveDisabledReason } : undefined"
+          class=":uno: h-fit"
+        >
           <VButton
             v-model:disabled="saveDisable"
             :loading="saving"
