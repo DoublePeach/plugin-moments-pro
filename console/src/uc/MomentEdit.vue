@@ -259,39 +259,52 @@ const saveDisabledReason = computed<string | null>(() => {
 const saveDisable = computed(() => saveDisabledReason.value !== null);
 
 const releaseTimeDate = computed<Date | null>({
-  get: () =>
-    formState.value.spec.releaseTime ? new Date(formState.value.spec.releaseTime) : null,
+  get: () => {
+    if (!formState.value.spec.releaseTime) return null;
+    const d = new Date(formState.value.spec.releaseTime);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  },
   set: (val) => {
-    formState.value.spec.releaseTime = val ? val.toISOString() : new Date().toISOString();
+    const target = val ? new Date(val) : new Date();
+    target.setHours(12, 0, 0, 0);
+    formState.value.spec.releaseTime = target.toISOString();
   },
 });
 
 const releaseTimeShortcuts = [
   {
-    text: "此刻",
-    onClick: () => new Date(),
-  },
-  {
-    text: "一小时后",
+    text: "今天",
     onClick: () => {
       const d = new Date();
-      d.setHours(d.getHours() + 1);
+      d.setHours(0, 0, 0, 0);
       return d;
     },
   },
   {
-    text: "今晚 20:00",
+    text: "昨天",
     onClick: () => {
       const d = new Date();
-      d.setHours(20, 0, 0, 0);
+      d.setDate(d.getDate() - 1);
+      d.setHours(0, 0, 0, 0);
       return d;
     },
   },
   {
-    text: "明天此刻",
+    text: "明天",
     onClick: () => {
       const d = new Date();
       d.setDate(d.getDate() + 1);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    },
+  },
+  {
+    text: "上周此刻",
+    onClick: () => {
+      const d = new Date();
+      d.setDate(d.getDate() - 7);
+      d.setHours(0, 0, 0, 0);
       return d;
     },
   },
@@ -390,16 +403,15 @@ function handleToggleVisible() {
         </div>
         <DatePicker
           v-model:value="releaseTimeDate"
-          v-tooltip="{ content: '发布时间' }"
-          type="datetime"
-          format="YYYY-MM-DD HH:mm"
-          :show-second="false"
+          v-tooltip="{ content: '发布日期' }"
+          type="date"
+          format="YYYY-MM-DD"
           :editable="false"
           :clearable="false"
           :shortcuts="releaseTimeShortcuts"
-          placeholder="发布时间"
+          placeholder="发布日期"
           input-class=":uno: mx-input rounded moment-release-time-input"
-          class=":uno: date-picker release-time-picker max-w-[11rem] cursor-pointer"
+          class=":uno: date-picker release-time-picker max-w-[10rem] cursor-pointer"
         />
       </div>
 

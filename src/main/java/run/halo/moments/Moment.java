@@ -49,6 +49,18 @@ public class Moment extends AbstractExtension {
         private Boolean approved;
 
         private Instant approvedTime;
+
+        @Schema(description = "Whether this moment is pinned to the top of the list.",
+            defaultValue = "false")
+        private Boolean pinned;
+
+        @Schema(description = "Manual sort order among pinned moments. "
+            + "Larger value means higher position. Ignored when pinned is false.")
+        private Integer pinOrder;
+    }
+
+    public boolean isPinned() {
+        return Boolean.TRUE.equals(this.getSpec().getPinned());
     }
 
     @Data

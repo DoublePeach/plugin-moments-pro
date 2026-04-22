@@ -12,16 +12,20 @@
 
 | 能力 | 官方版 | `plugin-moments-pro` |
 | --- | --- | --- |
-| 发布时间 | 只能由系统在创建时自动写入，事后无法修改 | ✅ 新建/编辑均可自定义「发布时间」（精确到分钟） |
-| 快捷时间选择 | ❌ | ✅ 内置「此刻 / 一小时后 / 今晚 20:00 / 明天此刻」快捷按钮 |
-| 列表默认排序 | 固定按 `metadata.creationTimestamp` | ✅ 默认按 `spec.releaseTime` 降序，支持 UI 一键切换 |
-| 列表排序选项 | ❌ | ✅ 支持按「发布时间 / 创建时间 × 升降序」切换，URL 可分享 |
+| 发布日期 | 只能由系统在创建时自动写入，事后无法修改 | ✅ 新建/编辑均可自定义「发布日期」，补录历史动态不再别扭 |
+| 日期快捷选择 | ❌ | ✅ 内置「今天 / 昨天 / 明天 / 上周此刻」快捷项 |
+| 置顶功能 | ❌ | ✅ 支持一键置顶/取消置顶，后续置顶会自动排到最上，可手动调整顺序 |
+| 批量操作 | ❌ | ✅ 列表顶部可开启「批量操作」模式，支持批量删除、批量审核、批量改可见性 |
+| 导出能力 | ❌ | ✅ 右上角"导出本页"一键导出当前列表为 JSON，便于备份/迁移/外部分析 |
+| 列表默认排序 | 固定按 `metadata.creationTimestamp` | ✅ 置顶优先，其余按 `spec.releaseTime` 降序；支持 UI 一键切换排序方式 |
+| 列表排序选项 | ❌ | ✅ 支持「发布时间 / 创建时间 × 升降序」切换，URL 可分享 |
 | 用户中心（UC）过滤 | 仅按标签与时间 | ✅ 追加「可见性」「排序」筛选 |
 | 保存按钮 | 灰色禁用、无提示 | ✅ 悬浮气泡明确告知禁用原因（内容为空 / 未修改 / 附件超限） |
 | `Ctrl+Enter` 提交 | 偶发不响应 | ✅ 基于 tiptap `editorProps.handleKeyDown` 注册，稳定触发；`⌘+Enter` 同样支持 |
-| 编辑时 patch 字段 | 不包含 `releaseTime` | ✅ 编辑时把 `releaseTime` 一并下发，改时间即可"补发"动态 |
+| 编辑时 patch 字段 | 不包含 `releaseTime` | ✅ 编辑时把 `releaseTime` 一并下发，改日期即可"补发"动态 |
+| 列表 UI/UX | 简单列表 | ✅ 过滤区粘性顶部、空状态插图、置顶高亮边条与徽标、批量模式高亮、加载过程不遮盖旧数据 |
 
-> 还有更多改进持续加入中，见 [CHANGELOG](#-更新日志) 或关注本仓库。
+> 还有更多改进持续加入中，见 [更新日志](#-更新日志) 或关注本仓库。
 
 ![Preview](./images/plugin-moments-preview.png)
 
@@ -119,15 +123,42 @@ halo:
 ### Pro 版本增量（基于官方 `main`）
 
 - **列表与编辑体验**
-  - 新建/编辑 瞬间时支持选择「发布时间」（datetime，精确到分钟）
+  - 新建/编辑 瞬间时支持选择「发布日期」（精确到日）
+  - 日期选择器内置快捷项：今天 / 昨天 / 明天 / 上周此刻
   - 列表支持排序下拉（发布时间 / 创建时间 × 升降序），URL 可分享
-  - 列表默认按 `spec.releaseTime` 降序展示
+  - 列表默认按置顶优先 + `spec.releaseTime` 降序展示
   - 保存按钮在禁用时显示原因气泡
   - `Ctrl+Enter` / `⌘+Enter` 通过 tiptap keymap 注册，稳定触发提交
-  - 发布时间选择器内置快捷项（此刻 / 一小时后 / 今晚 20:00 / 明天此刻）
+  - 列表过滤栏改为粘性顶部，空状态新增插图+引导文案
+  - 加载过程中旧数据以半透明形式保留，减少闪烁
+- **管理能力**
+  - 新增「置顶 / 取消置顶」：置顶后的瞬间自动浮到列表最上，支持通过 `/-/pin-order` 调整手动顺序
+  - 置顶瞬间有左侧高亮条与"置顶"徽标，辨识度高
+  - 列表顶部新增「批量操作」模式：可多选后批量删除、批量审核、批量设为公开/私有
+  - 顶部操作区新增"导出本页"，一键导出当前筛选条件下的 JSON 数据
 - **UC（用户中心）**
   - 补齐「可见性」「排序」筛选条件
-  - 编辑自己的瞬间时同样支持修改发布时间
+  - 编辑自己的瞬间时同样支持修改发布日期
+
+### 新增的 Console API
+
+以下接口仅在登录态的后台（`console` 分组）中可用：
+
+| Method | Path | 描述 |
+| --- | --- | --- |
+| `PUT` | `/apis/console.api.moment.halo.run/v1alpha1/moments/{name}/pin` | 置顶指定瞬间 |
+| `PUT` | `/apis/console.api.moment.halo.run/v1alpha1/moments/{name}/unpin` | 取消置顶 |
+| `PUT` | `/apis/console.api.moment.halo.run/v1alpha1/moments/-/pin-order` | 批量调整置顶顺序，body 为 `{ "names": ["..."] }` |
+| `POST` | `/apis/console.api.moment.halo.run/v1alpha1/moments/-/delete-batch` | 批量删除，body 为 `{ "names": ["..."] }` |
+| `POST` | `/apis/console.api.moment.halo.run/v1alpha1/moments/-/approve-batch` | 批量审核通过，body 为 `{ "names": ["..."] }` |
+| `POST` | `/apis/console.api.moment.halo.run/v1alpha1/moments/-/visible-batch` | 批量改可见性，body 为 `{ "names": ["..."], "visible": "PUBLIC"\|"PRIVATE" }` |
+
+### 数据模型新增字段
+
+为 `MomentSpec` 新增了两个可选字段，均兼容历史数据（默认 `null`）：
+
+- `pinned: boolean` - 是否置顶
+- `pinOrder: integer` - 置顶位次，数值越大越靠前；取消置顶时自动清空
 
 ---
 
@@ -386,7 +417,9 @@ momentFinder.list({
         "releaseTime": "string",
         "visible": "PUBLIC",
         "owner": "string",
-        "tags": ["string"]
+        "tags": ["string"],
+        "pinned": false,
+        "pinOrder": 0
     },
     "owner": {
         "name": "string",

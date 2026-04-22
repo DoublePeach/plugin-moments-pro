@@ -7,7 +7,10 @@ import static org.springdoc.core.fn.builders.requestbody.Builder.requestBodyBuil
 
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import lombok.AllArgsConstructor;
+import lombok.Data;
 import org.apache.commons.lang3.StringUtils;
 import org.springdoc.core.fn.builders.schema.Builder;
 import org.springdoc.webflux.core.fn.SpringdocRouteBuilder;
@@ -92,6 +95,83 @@ public class MomentEndpoint implements CustomEndpoint {
                     .response(responseBuilder()
                         .implementation(Moment.class))
             )
+            .PUT("moments/{name}/pin", this::pinMoment,
+                builder -> builder.operationId("PinMoment")
+                    .description("Pin a moment to the top.")
+                    .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("name")
+                        .in(ParameterIn.PATH)
+                        .required(true)
+                        .implementation(String.class))
+                    .response(responseBuilder()
+                        .implementation(Moment.class))
+            )
+            .PUT("moments/{name}/unpin", this::unpinMoment,
+                builder -> builder.operationId("UnpinMoment")
+                    .description("Remove pin from a moment.")
+                    .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("name")
+                        .in(ParameterIn.PATH)
+                        .required(true)
+                        .implementation(String.class))
+                    .response(responseBuilder()
+                        .implementation(Moment.class))
+            )
+            .PUT("moments/-/pin-order", this::reorderPinned,
+                builder -> builder.operationId("ReorderPinnedMoments")
+                    .description("Reorder pinned moments. "
+                        + "The first name in the list will become the top one.")
+                    .tag(tag)
+                    .requestBody(requestBodyBuilder()
+                        .required(true)
+                        .content(contentBuilder()
+                            .mediaType(MediaType.APPLICATION_JSON_VALUE)
+                            .schema(Builder.schemaBuilder()
+                                .implementation(NamesRequest.class))
+                        ))
+                    .response(responseBuilder().implementation(Map.class))
+            )
+            .POST("moments/-/delete-batch", this::deleteBatch,
+                builder -> builder.operationId("DeleteMomentsBatch")
+                    .description("Delete moments in batch by names.")
+                    .tag(tag)
+                    .requestBody(requestBodyBuilder()
+                        .required(true)
+                        .content(contentBuilder()
+                            .mediaType(MediaType.APPLICATION_JSON_VALUE)
+                            .schema(Builder.schemaBuilder()
+                                .implementation(NamesRequest.class))
+                        ))
+                    .response(responseBuilder().implementation(Map.class))
+            )
+            .POST("moments/-/approve-batch", this::approveBatch,
+                builder -> builder.operationId("ApproveMomentsBatch")
+                    .description("Approve moments in batch by names.")
+                    .tag(tag)
+                    .requestBody(requestBodyBuilder()
+                        .required(true)
+                        .content(contentBuilder()
+                            .mediaType(MediaType.APPLICATION_JSON_VALUE)
+                            .schema(Builder.schemaBuilder()
+                                .implementation(NamesRequest.class))
+                        ))
+                    .response(responseBuilder().implementation(Map.class))
+            )
+            .POST("moments/-/visible-batch", this::setVisibleBatch,
+                builder -> builder.operationId("SetMomentsVisibleBatch")
+                    .description("Update visibility of moments in batch by names.")
+                    .tag(tag)
+                    .requestBody(requestBodyBuilder()
+                        .required(true)
+                        .content(contentBuilder()
+                            .mediaType(MediaType.APPLICATION_JSON_VALUE)
+                            .schema(Builder.schemaBuilder()
+                                .implementation(VisibleBatchRequest.class))
+                        ))
+                    .response(responseBuilder().implementation(Map.class))
+            )
             .build();
     }
 
@@ -134,9 +214,59 @@ public class MomentEndpoint implements CustomEndpoint {
             .flatMap(result -> ServerResponse.ok().bodyValue(result));
     }
 
+    private Mono<ServerResponse> pinMoment(ServerRequest request) {
+        var name = request.pathVariable("name");
+        return momentService.setPinned(name, true)
+            .flatMap(moment -> ServerResponse.ok().bodyValue(moment));
+    }
+
+    private Mono<ServerResponse> unpinMoment(ServerRequest request) {
+        var name = request.pathVariable("name");
+        return momentService.setPinned(name, false)
+            .flatMap(moment -> ServerResponse.ok().bodyValue(moment));
+    }
+
+    private Mono<ServerResponse> reorderPinned(ServerRequest request) {
+        return request.bodyToMono(NamesRequest.class)
+            .flatMap(body -> momentService.reorderPinned(body.getNames())
+                .then(ServerResponse.ok()
+                    .bodyValue(Map.of("total",
+                        body.getNames() == null ? 0 : body.getNames().size()))));
+    }
+
+    private Mono<ServerResponse> deleteBatch(ServerRequest request) {
+        return request.bodyToMono(NamesRequest.class)
+            .flatMap(body -> momentService.deleteBatch(body.getNames())
+                .flatMap(count -> ServerResponse.ok().bodyValue(Map.of("deleted", count))));
+    }
+
+    private Mono<ServerResponse> approveBatch(ServerRequest request) {
+        return request.bodyToMono(NamesRequest.class)
+            .flatMap(body -> momentService.approveBatch(body.getNames())
+                .flatMap(count -> ServerResponse.ok().bodyValue(Map.of("updated", count))));
+    }
+
+    private Mono<ServerResponse> setVisibleBatch(ServerRequest request) {
+        return request.bodyToMono(VisibleBatchRequest.class)
+            .flatMap(body -> momentService
+                .setVisibleBatch(body.getNames(), body.getVisible())
+                .flatMap(count -> ServerResponse.ok().bodyValue(Map.of("updated", count))));
+    }
+
     private Mono<String> getCurrentUser() {
         return ReactiveSecurityContextHolder.getContext()
             .map(SecurityContext::getAuthentication)
             .map(Authentication::getName);
+    }
+
+    @Data
+    public static class NamesRequest {
+        private List<String> names;
+    }
+
+    @Data
+    public static class VisibleBatchRequest {
+        private List<String> names;
+        private Moment.MomentVisible visible;
     }
 }

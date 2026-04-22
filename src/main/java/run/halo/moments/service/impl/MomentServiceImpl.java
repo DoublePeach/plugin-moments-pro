@@ -3,12 +3,12 @@ package run.halo.moments.service.impl;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.Assert;
-import org.springframework.web.server.ServerWebInputException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.app.core.extension.Counter;
@@ -145,5 +145,113 @@ public class MomentServiceImpl implements MomentService {
                 var name = ctx.getAuthentication().getName();
                 return client.fetch(User.class, name);
             });
+    }
+
+    @Override
+    public Mono<Moment> setPinned(String name, boolean pinned) {
+        return client.get(Moment.class, name)
+            .flatMap(moment -> {
+                var spec = moment.getSpec();
+                spec.setPinned(pinned);
+                if (pinned) {
+                    return maxPinOrder()
+                        .map(max -> {
+                            spec.setPinOrder(max + 1);
+                            return moment;
+                        })
+                        .flatMap(client::update);
+                }
+                spec.setPinOrder(null);
+                return client.update(moment);
+            });
+    }
+
+    @Override
+    public Mono<Void> reorderPinned(List<String> orderedNames) {
+        if (orderedNames == null || orderedNames.isEmpty()) {
+            return Mono.empty();
+        }
+        int total = orderedNames.size();
+        return Flux.fromIterable(orderedNames)
+            .index()
+            .concatMap(tuple -> {
+                var index = tuple.getT1();
+                var name = tuple.getT2();
+                int order = total - index.intValue();
+                return client.get(Moment.class, name)
+                    .flatMap(moment -> {
+                        moment.getSpec().setPinned(true);
+                        moment.getSpec().setPinOrder(order);
+                        return client.update(moment);
+                    })
+                    .onErrorResume(e -> Mono.empty());
+            })
+            .then();
+    }
+
+    @Override
+    public Mono<Long> deleteBatch(List<String> names) {
+        if (names == null || names.isEmpty()) {
+            return Mono.just(0L);
+        }
+        var counter = new AtomicInteger();
+        return Flux.fromIterable(names)
+            .concatMap(name -> client.fetch(Moment.class, name)
+                .flatMap(client::delete)
+                .doOnNext(ignored -> counter.incrementAndGet())
+                .onErrorResume(e -> Mono.empty())
+            )
+            .then(Mono.fromSupplier(() -> (long) counter.get()));
+    }
+
+    @Override
+    public Mono<Long> approveBatch(List<String> names) {
+        if (names == null || names.isEmpty()) {
+            return Mono.just(0L);
+        }
+        var counter = new AtomicInteger();
+        return Flux.fromIterable(names)
+            .concatMap(name -> client.get(Moment.class, name)
+                .flatMap(moment -> {
+                    var spec = moment.getSpec();
+                    if (Boolean.TRUE.equals(spec.getApproved())) {
+                        return Mono.just(moment);
+                    }
+                    spec.setApproved(true);
+                    spec.setApprovedTime(Instant.now());
+                    return client.update(moment)
+                        .doOnNext(ignored -> counter.incrementAndGet());
+                })
+                .onErrorResume(e -> Mono.empty())
+            )
+            .then(Mono.fromSupplier(() -> (long) counter.get()));
+    }
+
+    @Override
+    public Mono<Long> setVisibleBatch(List<String> names, Moment.MomentVisible visible) {
+        if (names == null || names.isEmpty() || visible == null) {
+            return Mono.just(0L);
+        }
+        var counter = new AtomicInteger();
+        return Flux.fromIterable(names)
+            .concatMap(name -> client.get(Moment.class, name)
+                .flatMap(moment -> {
+                    if (visible.equals(moment.getSpec().getVisible())) {
+                        return Mono.just(moment);
+                    }
+                    moment.getSpec().setVisible(visible);
+                    return client.update(moment)
+                        .doOnNext(ignored -> counter.incrementAndGet());
+                })
+                .onErrorResume(e -> Mono.empty())
+            )
+            .then(Mono.fromSupplier(() -> (long) counter.get()));
+    }
+
+    private Mono<Integer> maxPinOrder() {
+        return client.listAll(Moment.class, new ListOptions(),
+                Sort.by(Sort.Order.desc("spec.pinOrder")))
+            .map(m -> Objects.requireNonNullElse(m.getSpec().getPinOrder(), 0))
+            .reduce(0, Math::max);
     }
 }

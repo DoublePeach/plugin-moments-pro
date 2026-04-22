@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { momentsCoreApiClient } from "@/api";
+import { momentsConsoleApiClient, momentsCoreApiClient } from "@/api";
 import type { ListedMoment, Moment } from "@/api/generated";
 import {
   Dialog,
@@ -14,16 +14,23 @@ import { utils } from "@halo-dev/ui-shared";
 import { useQueryClient } from "@tanstack/vue-query";
 import { computed, ref } from "vue";
 import LucideMoreHorizontal from "~icons/lucide/more-horizontal";
+import MingcutePushpin2Fill from "~icons/mingcute/pin-2-fill";
 import MomentEdit from "./MomentEdit.vue";
 import MomentPreview from "./MomentPreview.vue";
 
 const props = withDefaults(
   defineProps<{
     listedMoment: ListedMoment;
-    editing: boolean;
+    editing?: boolean;
+    /** Whether batch selection mode is active. */
+    selectable?: boolean;
+    /** Whether this item is currently selected. */
+    selected?: boolean;
   }>(),
   {
     editing: false,
+    selectable: false,
+    selected: false,
   }
 );
 
@@ -31,12 +38,16 @@ const emit = defineEmits<{
   (event: "save", moment: Moment): void;
   (event: "update", moment: Moment): void;
   (event: "remove"): void;
+  (event: "toggle-select", name: string): void;
 }>();
 
 const queryClient = useQueryClient();
 
 const editing = ref(props.editing);
 const owner = computed(() => props.listedMoment?.owner);
+const isPinned = computed(() =>
+  Boolean((props.listedMoment?.moment.spec as { pinned?: boolean })?.pinned)
+);
 
 const deleteMoment = () => {
   Dialog.warning({
@@ -52,7 +63,7 @@ const deleteMoment = () => {
         Toast.success("删除成功");
         emit("remove");
       } catch (error) {
-        console.error("Failed to delete comment", error);
+        console.error("Failed to delete moment", error);
       }
     },
   });
@@ -76,11 +87,48 @@ const handleApproved = async () => {
 
   queryClient.invalidateQueries({ queryKey: ["plugin:moments:list"] });
 };
+
+const handleTogglePin = async () => {
+  try {
+    if (isPinned.value) {
+      await momentsConsoleApiClient.unpin(props.listedMoment.moment.metadata.name);
+      Toast.success("已取消置顶");
+    } else {
+      await momentsConsoleApiClient.pin(props.listedMoment.moment.metadata.name);
+      Toast.success("已置顶");
+    }
+    queryClient.invalidateQueries({ queryKey: ["plugin:moments:list"] });
+  } catch (error) {
+    console.error("Failed to toggle pin", error);
+  }
+};
+
+function toggleSelect() {
+  emit("toggle-select", props.listedMoment.moment.metadata.name);
+}
 </script>
 <template>
   <div>
-    <div class=":uno: card preview relative shrink border-t border-gray-100 bg-white py-6">
+    <div
+      class=":uno: card preview relative shrink border-t border-gray-100 bg-white py-6 transition-colors"
+      :class="{
+        ':uno: bg-sky-50/40': selected,
+      }"
+    >
+      <div v-if="isPinned" class=":uno: absolute left-0 top-0 h-full w-[3px] bg-amber-500/90"></div>
       <div class=":uno: flex items-start gap-3">
+        <label
+          v-if="selectable"
+          class=":uno: mt-2 flex cursor-pointer select-none items-center justify-center"
+          @click.stop
+        >
+          <input
+            type="checkbox"
+            class=":uno: h-4 w-4 cursor-pointer accent-sky-600"
+            :checked="selected"
+            @change="toggleSelect"
+          />
+        </label>
         <VAvatar
           :alt="owner?.displayName"
           :src="owner?.avatar"
@@ -93,6 +141,14 @@ const handleApproved = async () => {
             <div class=":uno: flex items-center space-x-3">
               <div>
                 <b> {{ owner?.displayName }} </b>
+              </div>
+              <div
+                v-if="isPinned"
+                v-tooltip="{ content: '已置顶' }"
+                class=":uno: inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700"
+              >
+                <MingcutePushpin2Fill class=":uno: size-3" />
+                <span>置顶</span>
               </div>
               <div
                 v-if="listedMoment?.moment.spec.visible == 'PRIVATE'"
@@ -139,6 +195,9 @@ const handleApproved = async () => {
                 <template #popper>
                   <VDropdownItem v-if="!listedMoment?.moment.spec.approved" @click="handleApproved">
                     审核通过
+                  </VDropdownItem>
+                  <VDropdownItem @click="handleTogglePin">
+                    {{ isPinned ? "取消置顶" : "置顶" }}
                   </VDropdownItem>
                   <VDropdownItem @click="editing = true"> 编辑 </VDropdownItem>
                   <VDropdownItem type="danger" @click="deleteMoment"> 删除 </VDropdownItem>

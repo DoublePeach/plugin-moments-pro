@@ -63,6 +63,20 @@ public class MomentsPlugin extends BasePlugin {
                     return approved == null ? null : approved.toString();
                 }))
             );
+            indexSpecs.add(new IndexSpec()
+                .setName("spec.pinned")
+                .setIndexFunc(simpleAttribute(Moment.class, moment -> {
+                    var pinned = moment.getSpec().getPinned();
+                    return BooleanUtils.toStringTrueFalse(Boolean.TRUE.equals(pinned));
+                }))
+            );
+            indexSpecs.add(new IndexSpec()
+                .setName("spec.pinOrder")
+                .setIndexFunc(simpleAttribute(Moment.class, moment -> {
+                    var pinOrder = moment.getSpec().getPinOrder();
+                    return pinOrder == null ? null : String.format("%010d", pinOrder);
+                }))
+            );
 
             indexSpecs.add(new IndexSpec()
                 .setName(Moment.REQUIRE_SYNC_ON_STARTUP_INDEX_NAME)

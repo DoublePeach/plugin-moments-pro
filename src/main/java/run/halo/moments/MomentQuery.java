@@ -133,7 +133,13 @@ public class MomentQuery extends SortableRequest {
         if (sort.isUnsorted()) {
             sort = Sort.by("spec.releaseTime").descending();
         }
-        return PageRequestImpl.of(getPage(), getSize(), sort);
+        // Pinned moments always float to the top, followed by custom pinOrder desc,
+        // then the user-specified or default sort.
+        var pinnedSort = Sort.by(
+            Sort.Order.desc("spec.pinned"),
+            Sort.Order.desc("spec.pinOrder")
+        );
+        return PageRequestImpl.of(getPage(), getSize(), pinnedSort.and(sort));
     }
 
     @Schema(description = "moment approved.")
