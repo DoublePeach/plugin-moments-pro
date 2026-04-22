@@ -1,0 +1,25 @@
+apiVersion: plugin.halo.run/v1alpha1
+kind: Plugin
+metadata:
+  name: PluginMoments
+  annotations:
+    "store.halo.run/app-id": "app-SnwWD"
+spec:
+  enabled: true
+  requires: ">=2.22.0"
+  author:
+    name: Halo
+    website: https://github.com/halo-dev
+  logo: logo.svg
+  configMapName: plugin-moments-configmap
+  settingName: plugin-moments-settings
+  homepage: https://www.halo.run/store/apps/app-SnwWD
+  repo: https://github.com/halo-sigs/plugin-moments
+  issues: https://github.com/halo-sigs/plugin-moments/issues
+  displayName: "瞬间"
+  description: "Halo 2.0 的瞬间管理插件，提供一个轻量级的内容发布功能，支持发布图文、视频、音频等内容。"
+  pluginDependencies:
+    "PluginFeed?": ">=1.4.0"
+  license:
+    - name: "GPL-3.0"
+      url: "https://github.com/halo-sigs/plugin-moments/blob/main/LICENSE"

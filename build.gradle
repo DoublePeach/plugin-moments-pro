@@ -1,0 +1,74 @@
+plugins {
+    id "com.github.node-gradle.node" version "5.0.0"
+    id "io.freefair.lombok" version "8.0.0-rc2"
+    id "run.halo.plugin.devtools" version "0.4.1"
+    id 'java'
+}
+
+group 'run.halo.moments'
+sourceCompatibility = JavaVersion.VERSION_17
+
+repositories {
+    mavenCentral()
+    maven { url 'https://repo.spring.io/milestone' }
+    maven { url 'https://s01.oss.sonatype.org/content/repositories/releases' }
+}
+
+dependencies {
+    implementation platform('run.halo.tools.platform:plugin:2.20.11')
+    compileOnly 'run.halo.app:api'
+    compileOnly "run.halo.feed:api:1.4.0"
+
+    testImplementation 'run.halo.app:api'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+node {
+    nodeProjectDir = file("${project.projectDir}/console")
+}
+
+tasks.register('installDepsForUI', PnpmTask) {
+    args = ['install']
+}
+
+tasks.register('buildFrontend', PnpmTask) {
+    args = ['build']
+    dependsOn('installDepsForUI')
+}
+
+build {
+    tasks.named('compileJava').configure {
+        dependsOn('buildFrontend')
+    }
+}
+
+halo {
+    version = '2.22.0-alpha.2'
+    debug = true;
+}
+
+haloPlugin {
+    openApi {
+        outputDir = file("$rootDir/api-docs/openapi/v3_0")
+        groupingRules {
+            momentsApi {
+                displayName = 'Extension API for Moments Plugin'
+                pathsToMatch = [
+                        '/apis/moment.halo.run/v1alpha1/**',
+                        '/apis/console.api.moment.halo.run/v1alpha1/**',
+                        '/apis/uc.api.moment.halo.run/v1alpha1/**'
+                ]
+            }
+        }
+        groupedApiMappings = [
+                '/v3/api-docs/momentsApi': 'momentsApi.json'
+        ]
+        generator {
+            outputDir = file("${projectDir}/console/src/api/generated")
+        }
+    }
+}
