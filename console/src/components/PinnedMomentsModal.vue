@@ -42,8 +42,9 @@ async function loadPinned() {
     const { data } = await momentsConsoleApiClient.moment.listMoments({
       page: 1,
       size: 200,
-      // @ts-expect-error - pinned is a new query param not yet regenerated in the API client.
-      pinned: true,
+      // The generated API client silently drops unknown query params,
+      // so we use fieldSelector (which IS part of the official signature).
+      fieldSelector: ["spec.pinned=true"],
       sort: ["spec.pinOrder,desc"],
     });
     list.value = [...data.items];

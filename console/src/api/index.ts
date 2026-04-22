@@ -1,4 +1,4 @@
-import { axiosInstance } from "@halo-dev/api-client";
+import { axiosInstance, coreApiClient, type Counter } from "@halo-dev/api-client";
 import {
   ConsoleApiMomentHaloRunV1alpha1MomentApi,
   MomentV1alpha1Api,
@@ -11,26 +11,10 @@ const momentsCoreApiClient = {
 
 const CONSOLE_BASE = "/apis/console.api.moment.halo.run/v1alpha1/moments";
 
-/** Counter resource for a moment. Matches Halo core {@code Counter} extension. */
-export interface MomentCounter {
-  apiVersion?: string;
-  kind?: string;
-  metadata: {
-    name: string;
-    version?: number;
-  };
-  upvote?: number;
-  totalComment?: number;
-  approvedComment?: number;
-  visit?: number;
-}
-
 /** Returns the counter resource name for a moment by its metadata.name. */
 export function momentCounterName(momentName: string) {
   return `moments.moment.halo.run/${momentName}`;
 }
-
-const COUNTER_BASE = "/apis/metrics.halo.run/v1alpha1/counters";
 
 const momentsConsoleApiClient = {
   moment: new ConsoleApiMomentHaloRunV1alpha1MomentApi(undefined, "", axiosInstance),
@@ -67,44 +51,55 @@ const momentsConsoleApiClient = {
       { names, visible }
     );
   },
-  /** Fetch the counter (upvote / comment stats) of a single moment. */
-  async getCounter(momentName: string) {
+  /**
+   * Fetch the counter (upvote / comment stats) of a single moment.
+   *
+   * We query via {@code listCounter} + fieldSelector instead of {@code getCounter}
+   * for two reasons:
+   * 1. Counter names contain '/', which requires URL-encoding. When unencoded
+   *    (as Spring sometimes decodes path variables), Spring's NoResourceFound
+   *    handler returns "No static resource ...", which the Halo console
+   *    global error interceptor surfaces as an ugly toast.
+   * 2. listCounter never 404s on a missing counter; it just returns an empty
+   *    list. This is exactly the semantics we want: "null if not yet created".
+   */
+  async getCounter(momentName: string): Promise<Counter | null> {
     const name = momentCounterName(momentName);
-    try {
-      const { data } = await axiosInstance.get<MomentCounter>(`${COUNTER_BASE}/${name}`);
-      return data;
-    } catch (e) {
-      if ((e as { response?: { status?: number } })?.response?.status === 404) {
-        return null;
-      }
-      throw e;
-    }
+    const { data } = await coreApiClient.metrics.counter.listCounter({
+      page: 1,
+      size: 1,
+      fieldSelector: [`metadata.name=${name}`],
+    });
+    return data.items?.[0] ?? null;
   },
   /** Update the upvote count of a single moment. Preserves other fields. */
-  async setUpvote(momentName: string, upvote: number) {
+  async setUpvote(momentName: string, upvote: number): Promise<Counter> {
     const name = momentCounterName(momentName);
+    const next = Math.max(0, Math.floor(upvote));
     const existing = await momentsConsoleApiClient.getCounter(momentName);
     if (existing) {
-      const payload: MomentCounter = {
+      const payload: Counter = {
         ...existing,
-        upvote: Math.max(0, Math.floor(upvote)),
+        upvote: next,
       };
-      const { data } = await axiosInstance.put<MomentCounter>(
-        `${COUNTER_BASE}/${name}`,
-        payload
-      );
+      const { data } = await coreApiClient.metrics.counter.updateCounter({
+        name,
+        counter: payload,
+      });
       return data;
     }
-    const payload: MomentCounter = {
+    const payload: Counter = {
       apiVersion: "metrics.halo.run/v1alpha1",
       kind: "Counter",
       metadata: { name },
-      upvote: Math.max(0, Math.floor(upvote)),
+      upvote: next,
       totalComment: 0,
       approvedComment: 0,
       visit: 0,
     };
-    const { data } = await axiosInstance.post<MomentCounter>(COUNTER_BASE, payload);
+    const { data } = await coreApiClient.metrics.counter.createCounter({
+      counter: payload,
+    });
     return data;
   },
 };

@@ -130,10 +130,11 @@ const {
       endDate: endDate.value,
       tag: tag.value,
       sort: selectedSort.value ? [selectedSort.value] : [DEFAULT_SORT],
-      // Exclude pinned moments from the main list; they are managed from
-      // the dedicated "置顶管理" modal to avoid clutter.
-      // @ts-expect-error - pinned is a new query param not yet regenerated in the API client.
-      pinned: false,
+      // Exclude pinned moments from the main list; they are managed from the
+      // dedicated "置顶管理" modal. We use fieldSelector here instead of a
+      // custom query param, because the auto-generated API client signature
+      // does not forward unknown parameters.
+      fieldSelector: ["spec.pinned=false"],
     });
 
     total.value = data.total;
@@ -198,8 +199,7 @@ const { data: pinnedCount } = useQuery({
     const { data } = await momentsConsoleApiClient.moment.listMoments({
       page: 1,
       size: 1,
-      // @ts-expect-error - new param
-      pinned: true,
+      fieldSelector: ["spec.pinned=true"],
     });
     return data.total;
   },
