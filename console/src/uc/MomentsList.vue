@@ -63,7 +63,7 @@ const {
   refetch,
 } = useQuery({
   queryKey: [
-    "plugin:moments:list",
+    "plugin:moments:uc:list",
     page,
     size,
     selectedVisible,

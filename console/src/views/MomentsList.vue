@@ -4,6 +4,7 @@ import FilterDropdown from "@/components/FilterDropdown.vue";
 import MomentEdit from "@/components/MomentEdit.vue";
 import MomentItem from "@/components/MomentItem.vue";
 import PinnedMomentsModal from "@/components/PinnedMomentsModal.vue";
+import TagFilterDropdown from "@/components/TagFilterDropdown.vue";
 import { usePluginShikiScriptLoader } from "@/plugin-supports/shiki/use-plugin-shiki-script-loader";
 import {
   Dialog,
@@ -17,8 +18,10 @@ import {
 } from "@halo-dev/components";
 import { utils } from "@halo-dev/ui-shared";
 import { useQuery, useQueryClient } from "@tanstack/vue-query";
+import { refDebounced } from "@vueuse/core";
 import { useRouteQuery } from "@vueuse/router";
 import { computed, provide, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import DatePicker from "vue-datepicker-next";
 import "vue-datepicker-next/index.css";
 import "vue-datepicker-next/locale/zh-cn.es";
@@ -26,22 +29,15 @@ import MingcuteCloseFill from "~icons/mingcute/close-fill";
 import MingcuteDownloadLine from "~icons/mingcute/download-line";
 import MingcuteMomentsLine from "~icons/mingcute/moment-line";
 import MingcutePin2Fill from "~icons/mingcute/pin-2-fill";
+import MingcuteTag2Line from "~icons/mingcute/tag-2-line";
 
+const router = useRouter();
 const queryClient = useQueryClient();
 
-// Tag filter in the main list is deprecated in plugin-moments-pro: tags are
-// auto-extracted from content and seldom selected explicitly in the admin list.
-// We still support deep-linking by keeping the route query, but the dropdown is hidden.
-const tag = useRouteQuery<string>("tag");
-const selectedApprovedStatus = useRouteQuery<string | undefined, boolean | undefined>(
-  "approved",
-  undefined,
-  {
-    transform: (value) => {
-      return value ? value === "true" : undefined;
-    },
-  }
-);
+const tag = useRouteQuery<string | undefined>("tag");
+const selectedVisible = useRouteQuery<"PUBLIC" | "PRIVATE" | undefined>("visible");
+const ownerName = useRouteQuery<string | undefined>("ownerName");
+const debouncedOwnerName = refDebounced(ownerName, 300);
 
 const page = ref(1);
 const size = ref(20);
@@ -50,7 +46,6 @@ const totalPages = ref(1);
 const hasPrevious = ref(false);
 const hasNext = ref(false);
 
-const keyword = ref("");
 const momentsRangeTime = ref<Array<Date>>([]);
 
 const DEFAULT_SORT = "spec.releaseTime,desc";
@@ -60,6 +55,10 @@ const sortItems = [
   { label: "发布时间 ↑", value: "spec.releaseTime,asc" },
   { label: "创建时间 ↓", value: "metadata.creationTimestamp,desc" },
   { label: "创建时间 ↑", value: "metadata.creationTimestamp,asc" },
+];
+const visibleItems = [
+  { label: "公开", value: "PUBLIC" },
+  { label: "私有", value: "PRIVATE" },
 ];
 
 const startDate = computed(() => {
@@ -73,7 +72,6 @@ const endDate = computed(() => {
   return utils.date.dayjs(endTime).endOf("day").toISOString();
 });
 
-// --- batch selection state ---
 const selectable = ref(false);
 const selected = ref<Set<string>>(new Set());
 const selectedCount = computed(() => selected.value.size);
@@ -110,13 +108,13 @@ const {
   refetch,
 } = useQuery({
   queryKey: [
-    "plugin:moments:list",
+    "plugin:moments:console:list",
     page,
     size,
-    selectedApprovedStatus,
+    selectedVisible,
+    debouncedOwnerName,
     startDate,
     endDate,
-    keyword,
     tag,
     selectedSort,
   ],
@@ -124,17 +122,13 @@ const {
     const { data } = await momentsConsoleApiClient.moment.listMoments({
       page: page.value,
       size: size.value,
-      approved: selectedApprovedStatus.value,
-      keyword: keyword.value,
+      ownerName: debouncedOwnerName.value || undefined,
+      visible: selectedVisible.value,
       startDate: startDate.value,
       endDate: endDate.value,
       tag: tag.value,
       sort: selectedSort.value ? [selectedSort.value] : [DEFAULT_SORT],
-      // Exclude pinned moments from the main list; they are managed from the
-      // dedicated "置顶管理" modal. We use fieldSelector here instead of a
-      // custom query param, because the auto-generated API client signature
-      // does not forward unknown parameters.
-      fieldSelector: ["spec.pinned=false"],
+      fieldSelector: tag.value ? undefined : ["spec.pinned=false"],
     });
 
     total.value = data.total;
@@ -174,23 +168,33 @@ function updateTagQuery(tagQuery: string) {
   tag.value = tagQuery;
 }
 
+function clearTagFilter() {
+  tag.value = undefined;
+}
+
 provide("tag", {
   tag: tag.value,
   updateTagQuery,
 });
 
-watch([tag, selectedApprovedStatus, momentsRangeTime, selectedSort], () => {
-  page.value = 1;
-  size.value = 20;
-  clearSelection();
-  refetch();
-});
+watch(
+  [tag, selectedVisible, debouncedOwnerName, momentsRangeTime, selectedSort],
+  () => {
+    page.value = 1;
+    size.value = 20;
+    clearSelection();
+    refetch();
+  }
+);
 
 const handleJumpToFrontDesk = () => {
   window.open("/moments", "_blank");
 };
 
-// --- pinned management modal ---
+const handleOpenTagManage = () => {
+  router.push({ name: "MomentTags" });
+};
+
 const pinnedModalVisible = ref(false);
 
 const { data: pinnedCount } = useQuery({
@@ -211,14 +215,13 @@ function openPinnedModal() {
 }
 
 function onPinnedChanged() {
-  queryClient.invalidateQueries({ queryKey: ["plugin:moments:list"] });
+  queryClient.invalidateQueries({ queryKey: ["plugin:moments:console:list"] });
   queryClient.invalidateQueries({ queryKey: ["plugin:moments:pinned-count"] });
 }
 
-// --- batch actions ---
 const refreshAndClear = () => {
   clearSelection();
-  queryClient.invalidateQueries({ queryKey: ["plugin:moments:list"] });
+  queryClient.invalidateQueries({ queryKey: ["plugin:moments:console:list"] });
 };
 
 const batchDelete = () => {
@@ -241,17 +244,6 @@ const batchDelete = () => {
   });
 };
 
-const batchApprove = async () => {
-  if (selectedCount.value === 0) return;
-  try {
-    const { data } = await momentsConsoleApiClient.approveBatch(Array.from(selected.value));
-    Toast.success(`已审核通过 ${data.updated} 条`);
-    refreshAndClear();
-  } catch (e) {
-    console.error(e);
-  }
-};
-
 const batchSetVisible = async (visible: "PUBLIC" | "PRIVATE") => {
   if (selectedCount.value === 0) return;
   try {
@@ -266,7 +258,6 @@ const batchSetVisible = async (visible: "PUBLIC" | "PRIVATE") => {
   }
 };
 
-// --- export ---
 const exportJson = () => {
   if (!moments.value || moments.value.length === 0) {
     Toast.warning("当前没有可导出的数据");
@@ -293,6 +284,12 @@ usePluginShikiScriptLoader();
       <MingcuteMomentsLine />
     </template>
     <template #actions>
+      <VButton @click="handleOpenTagManage">
+        <template #icon>
+          <MingcuteTag2Line class=":uno: size-full" />
+        </template>
+        标签管理
+      </VButton>
       <VButton @click="openPinnedModal">
         <template #icon>
           <MingcutePin2Fill class=":uno: size-full" />
@@ -319,33 +316,29 @@ usePluginShikiScriptLoader();
       </VButton>
     </template>
   </VPageHeader>
-  <VCard class=":uno: m-0 flex-1 md:m-4">
-    <div class=":uno: mx-auto max-w-4xl px-4 md:px-8">
-      <div class=":uno: moments-content my-2 flex flex-col md:my-4 space-y-2">
-        <MomentEdit />
+  <VCard class=":uno: m-0 flex-1 bg-slate-50 md:m-4">
+    <div class=":uno: mx-auto max-w-4xl px-4 md:px-6">
+      <div class=":uno: moments-content my-3 flex flex-col space-y-3 md:my-5 md:space-y-4">
+        <section aria-label="发布瞬间">
+          <MomentEdit />
+        </section>
 
-        <!-- Filter bar (sticky) -->
-        <div
-          class=":uno: moment-header sticky top-0 z-10 -mx-4 bg-white/90 px-4 pb-2 pt-6 backdrop-blur md:-mx-8 md:px-8"
+        <section
+          class=":uno: moment-header sticky top-0 z-10 -mx-4 rounded-xl border border-slate-200/80 bg-white/95 px-4 py-3 shadow-sm backdrop-blur md:-mx-6 md:px-6"
+          aria-label="筛选与批量操作"
         >
-          <div class=":uno: flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+          <div class=":uno: flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
             <div class=":uno: flex flex-wrap items-center gap-2">
-              <FilterDropdown
-                v-model="selectedApprovedStatus"
-                label="状态"
-                :items="[
-                  { label: '全部' },
-                  { label: '已审核', value: true },
-                  { label: '待审核', value: false },
-                ]"
-              />
+              <TagFilterDropdown v-model="tag" label="标签" />
+              <FilterDropdown v-model="selectedVisible" label="可见性" :items="visibleItems" />
               <FilterDropdown v-model="selectedSort" label="排序" :items="sortItems" />
               <button
-                class=":uno: inline-flex cursor-pointer select-none items-center border rounded-lg px-3 text-sm leading-9 transition-colors"
+                type="button"
+                class=":uno: inline-flex h-9 cursor-pointer select-none items-center rounded-lg border px-3 text-sm transition-colors duration-200"
                 :class="
                   selectable
-                    ? ':uno: border-sky-600 bg-sky-50 text-sky-700'
-                    : ':uno: text-gray-700 hover:text-black'
+                    ? ':uno: border-blue-500 bg-blue-50 text-blue-700'
+                    : ':uno: border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                 "
                 @click="toggleSelectable"
               >
@@ -353,7 +346,14 @@ usePluginShikiScriptLoader();
               </button>
             </div>
 
-            <div class=":uno: flex !ml-0">
+            <div class=":uno: flex flex-wrap items-center gap-2">
+              <FormKit
+                v-model="ownerName"
+                type="text"
+                placeholder="作者用户名"
+                outer-class=":uno: !mb-0"
+                input-class=":uno: h-9 min-w-[8rem] rounded-lg border border-slate-200 px-3 text-sm transition-colors focus:border-blue-500"
+              />
               <DatePicker
                 v-model:value="momentsRangeTime"
                 input-class=":uno: mx-input rounded"
@@ -365,33 +365,41 @@ usePluginShikiScriptLoader();
             </div>
           </div>
 
-          <!-- Batch toolbar -->
+          <Transition name="fade">
+            <div
+              v-if="tag"
+              class=":uno: mt-3 flex items-center justify-between rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800"
+            >
+              <span>当前标签：#{{ tag }}</span>
+              <button
+                type="button"
+                class=":uno: cursor-pointer text-xs text-blue-600 transition-colors hover:text-blue-800"
+                @click="clearTagFilter"
+              >
+                清除筛选
+              </button>
+            </div>
+          </Transition>
+
           <Transition name="fade">
             <div
               v-if="selectable"
-              class=":uno: mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md bg-sky-50 px-3 py-2 text-sm"
+              class=":uno: mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
             >
               <div class=":uno: flex items-center gap-3">
                 <label class=":uno: inline-flex cursor-pointer items-center gap-2 select-none">
                   <input
                     type="checkbox"
-                    class=":uno: h-4 w-4 cursor-pointer accent-sky-600"
+                    class=":uno: h-4 w-4 cursor-pointer accent-blue-600"
                     :checked="allVisibleSelected"
                     :disabled="visibleNames.length === 0"
                     @change="toggleSelectAllVisible"
                   />
                   <span>全选本页</span>
                 </label>
-                <span class=":uno: text-gray-600">已选 {{ selectedCount }} 条</span>
+                <span class=":uno: text-slate-600">已选 {{ selectedCount }} 条</span>
               </div>
               <div class=":uno: flex flex-wrap items-center gap-2">
-                <VButton
-                  size="sm"
-                  :disabled="selectedCount === 0"
-                  @click="batchApprove"
-                >
-                  批量审核
-                </VButton>
                 <VButton
                   size="sm"
                   :disabled="selectedCount === 0"
@@ -406,33 +414,29 @@ usePluginShikiScriptLoader();
                 >
                   设为私有
                 </VButton>
-                <VButton
-                  size="sm"
-                  type="danger"
-                  :disabled="selectedCount === 0"
-                  @click="batchDelete"
-                >
+                <VButton size="sm" type="danger" :disabled="selectedCount === 0" @click="batchDelete">
                   批量删除
                 </VButton>
                 <button
                   v-if="selectedCount > 0"
                   v-tooltip="{ content: '清空选择' }"
-                  class=":uno: group flex cursor-pointer items-center justify-center rounded-full p-1 hover:bg-gray-200"
+                  type="button"
+                  class=":uno: group flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg transition-colors hover:bg-slate-200"
                   @click="clearSelection"
                 >
-                  <MingcuteCloseFill class=":uno: text-sm text-gray-500" />
+                  <MingcuteCloseFill class=":uno: text-sm text-slate-500" />
                 </button>
               </div>
             </div>
           </Transition>
-        </div>
+        </section>
 
         <VLoading v-if="isLoading" />
 
         <Transition v-else appear name="fade">
           <ul
             v-if="moments && moments.length > 0"
-            class=":uno: box-border flex flex-col space-y-2"
+            class=":uno: box-border flex flex-col space-y-3"
             :class="{ ':uno: opacity-60 pointer-events-none': isFetching }"
             role="list"
           >
@@ -449,11 +453,11 @@ usePluginShikiScriptLoader();
           </ul>
           <template v-else>
             <div
-              class=":uno: flex flex-col items-center justify-center py-20 text-gray-500 space-y-3"
+              class=":uno: flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white py-20 text-slate-500 space-y-3"
             >
-              <MingcuteMomentsLine class=":uno: text-5xl text-gray-300" />
-              <span>暂无数据</span>
-              <span class=":uno: text-xs text-gray-400">
+              <MingcuteMomentsLine class=":uno: text-5xl text-slate-300" />
+              <span class=":uno: text-base text-slate-600">暂无瞬间</span>
+              <span class=":uno: text-xs text-slate-400">
                 可以在顶部编辑器直接发布第一条瞬间
               </span>
             </div>
@@ -477,13 +481,13 @@ usePluginShikiScriptLoader();
 <style lang="scss">
 .date-picker {
   & input {
-    border-radius: 0.375rem;
+    border-radius: 0.5rem;
   }
 }
 
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.18s ease;
+  transition: opacity 0.2s ease;
 }
 .fade-enter-from,
 .fade-leave-to {

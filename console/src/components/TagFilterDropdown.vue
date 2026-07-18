@@ -53,8 +53,8 @@ const handleCloseTag = (event: Event) => {
 <template>
   <VDropdown ref="dropdown" :classes="[':uno: !p-0']" @show="refetch">
     <div
-      class=":uno: group flex cursor-pointer select-none items-center border rounded-lg px-3 text-sm text-gray-700 leading-9 hover:text-black"
-      :class="{ ':uno: font-semibold text-gray-700': modelValue !== undefined }"
+      class=":uno: group flex h-9 cursor-pointer select-none items-center rounded-lg border border-slate-200 px-3 text-sm text-slate-700 leading-9 transition-colors duration-200 hover:border-slate-300 hover:bg-slate-50"
+      :class="{ ':uno: border-blue-500 bg-blue-50 font-medium text-blue-700': modelValue !== undefined }"
     >
       <span v-if="!modelValue" class=":uno: mr-0.5">
         {{ label }}

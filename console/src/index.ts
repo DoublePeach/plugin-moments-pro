@@ -25,6 +25,17 @@ export default definePlugin({
         },
       },
     },
+    {
+      parentName: "Root",
+      route: {
+        path: "/moments/tags",
+        name: "MomentTags",
+        component: () => import("@/views/TagsManage.vue"),
+        meta: {
+          permissions: ["plugin:moments:view"],
+        },
+      },
+    },
   ],
   ucRoutes: [
     {
@@ -76,8 +87,6 @@ const determineMomentTitle = (moment: Moment) => {
 };
 
 const stripHtmlTags = (str: string) => {
-  // strip html tags
   const stripped = str?.replace(/<\/?[^>]+(>|$)/gi, "") || "";
-  // strip newlines and collapse spaces
   return stripped.replace(/\n/g, " ").replace(/\s+/g, " ");
 };

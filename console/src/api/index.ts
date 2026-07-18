@@ -4,12 +4,14 @@ import {
   MomentV1alpha1Api,
   UcApiMomentHaloRunV1alpha1MomentApi,
 } from "./generated";
+import type { MomentTagVo, TagMutationResult } from "@/types";
 
 const momentsCoreApiClient = {
   moment: new MomentV1alpha1Api(undefined, "", axiosInstance),
 };
 
 const CONSOLE_BASE = "/apis/console.api.moment.halo.run/v1alpha1/moments";
+const CONSOLE_API_BASE = "/apis/console.api.moment.halo.run/v1alpha1";
 
 /** Returns the counter resource name for a moment by its metadata.name. */
 export function momentCounterName(momentName: string) {
@@ -50,6 +52,25 @@ const momentsConsoleApiClient = {
       `${CONSOLE_BASE}/-/visible-batch`,
       { names, visible }
     );
+  },
+  /** List tags with moment counts for the tag management page. */
+  listTagStats(name?: string) {
+    return axiosInstance.get<MomentTagVo[]>(`${CONSOLE_API_BASE}/tag-stats`, {
+      params: name ? { name } : undefined,
+    });
+  },
+  /** Rename a tag across all related moments. */
+  renameTag(oldName: string, newName: string) {
+    return axiosInstance.post<TagMutationResult>(`${CONSOLE_API_BASE}/tags/-/rename`, {
+      oldName,
+      newName,
+    });
+  },
+  /** Delete a tag from all related moments. */
+  deleteTag(name: string) {
+    return axiosInstance.post<TagMutationResult>(`${CONSOLE_API_BASE}/tags/-/delete`, {
+      name,
+    });
   },
   /**
    * Fetch the counter (upvote / comment stats) of a single moment.

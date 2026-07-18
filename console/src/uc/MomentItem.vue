@@ -9,7 +9,6 @@ import {
   VAvatar,
   VDropdown,
   VDropdownItem,
-  VStatusDot,
 } from "@halo-dev/components";
 import { utils } from "@halo-dev/ui-shared";
 import { useQueryClient } from "@tanstack/vue-query";
@@ -45,7 +44,7 @@ const deleteMoment = () => {
 
         Toast.success("删除成功");
 
-        queryClient.invalidateQueries(["plugin:moments:list"]);
+        queryClient.invalidateQueries(["plugin:moments:uc:list"]);
       } catch (error) {
         console.error("Failed to delete comment", error);
       }
@@ -81,21 +80,6 @@ const onUpdated = () => {
                 }"
               >
                 <IconEyeOff class=":uno: text-xs text-gray-500" />
-              </div>
-              <div>
-                <VStatusDot
-                  v-show="!listedMoment?.moment.spec.approved"
-                  v-tooltip="'请等待管理员审核通过'"
-                  class=":uno: mr-2 cursor-default"
-                  state="success"
-                  animate
-                >
-                  <template #text>
-                    <span class=":uno: text-xs text-gray-500">
-                      {{ `审核中` }}
-                    </span>
-                  </template>
-                </VStatusDot>
               </div>
             </div>
             <div class=":uno: flex items-center">

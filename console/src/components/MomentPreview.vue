@@ -15,31 +15,26 @@ const props = defineProps<{
   uc: boolean;
 }>();
 
-const { updateTagQuery } = inject("tag") as {
-  tag: string;
-  updateTagQuery: (tag: string) => void;
-};
+const tagContext = inject<{ updateTagQuery: (tag: string) => void } | null>("tag", null);
 
 const emit = defineEmits<{
   (event: "switchEditMode"): void;
 }>();
 
 const queryClient = useQueryClient();
+const htmlParser = new DOMParser();
 
 const vLazy = {
   mounted: (el: HTMLElement) => {
-    // iframe
     const iframes = el.querySelectorAll<any>("iframe");
     iframes.forEach((iframe: any) => {
       iframe.loading = "lazy";
       iframe.importance = "low";
     });
-    // 图片
     const imgs = el.querySelectorAll<HTMLImageElement>("img,image");
     imgs.forEach((img: HTMLImageElement) => {
       img.loading = "lazy";
     });
-    // 视频，音频
     const medium = el.querySelectorAll<HTMLMediaElement>("video,audio");
     medium.forEach((media: HTMLMediaElement) => {
       media.autoplay = false;
@@ -48,20 +43,21 @@ const vLazy = {
   },
 };
 
-const vTag = {
-  mounted: (el: HTMLElement) => {
-    const tagNodes = el.querySelectorAll("a.tag");
-    for (let node of tagNodes) {
-      node.addEventListener("click", (event) => {
-        event.preventDefault();
-        let tagName = node.textContent;
-        if (tagName) {
-          updateTagQuery(node.textContent || "");
-        }
-      });
-    }
-  },
-};
+/** 后台展示用标签列表 */
+const adminTags = computed(() => props.moment.moment.spec.tags || []);
+
+/**
+ * 渲染用 HTML：移除历史正文内嵌标签，避免前台样式泄露到后台预览。
+ */
+const previewHtml = computed(() => {
+  const html = props.moment.moment.spec.content.html;
+  if (!html) {
+    return "";
+  }
+  const document = htmlParser.parseFromString(html, "text/html");
+  document.querySelectorAll("a.tag").forEach((node) => node.remove());
+  return document.body.innerHTML;
+});
 
 const mediums = ref(props.moment.moment.spec.content.medium || []);
 const detailVisible = ref<boolean>(false);
@@ -113,7 +109,7 @@ function onCommentListClose() {
   commentListVisible.value = false;
 
   queryClient.invalidateQueries({
-    queryKey: ["plugin:moments:list"],
+    queryKey: ["plugin:moments:console:list"],
   });
 }
 
@@ -123,6 +119,14 @@ function handleOpenCommentList() {
     return;
   }
   commentListVisible.value = true;
+}
+
+/**
+ * 点击后台标签徽章，触发列表筛选。
+ * @param tagName 标签名称
+ */
+function handleTagFilter(tagName: string) {
+  tagContext?.updateTagQuery(tagName);
 }
 
 defineOptions({
@@ -149,11 +153,27 @@ defineOptions({
   <div class=":uno: relative overflow-hidden" @dblclick="handleSwitchEdit">
     <div
       v-lazy
-      v-tag
       v-shiki
-      class=":uno: markdown-body moment-preview-html"
-      v-html="moment.moment.spec.content.html"
+      class=":uno: markdown-body moment-preview-html text-slate-800"
+      v-html="previewHtml"
     ></div>
+
+    <div
+      v-if="!uc && adminTags.length"
+      class=":uno: mt-3 flex flex-wrap gap-1.5"
+      role="list"
+      aria-label="瞬间标签"
+    >
+      <button
+        v-for="tagName in adminTags"
+        :key="tagName"
+        type="button"
+        class=":uno: moment-admin-tag inline-flex cursor-pointer items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs text-blue-700 transition-colors duration-200 hover:bg-blue-100"
+        @click="handleTagFilter(tagName)"
+      >
+        #{{ tagName }}
+      </button>
+    </div>
 
     <div
       v-if="!!moment.moment.spec.content.medium && moment.moment.spec.content.medium.length > 0"
@@ -163,7 +183,7 @@ defineOptions({
         <li
           v-for="(media, index) in moment.moment.spec.content.medium"
           :key="index"
-          class=":uno: inline-block cursor-pointer overflow-hidden border rounded-md"
+          class=":uno: inline-block cursor-pointer overflow-hidden rounded-lg border border-slate-200"
         >
           <div class=":uno: aspect-square" @click="handleClickMedium(index)">
             <template v-if="media.type == 'PHOTO'">
@@ -175,20 +195,20 @@ defineOptions({
             </template>
             <template v-else-if="media.type == 'VIDEO'">
               <div
-                class=":uno: size-full flex flex-col items-center justify-center bg-gray-100 space-y-1"
+                class=":uno: size-full flex flex-col items-center justify-center bg-slate-100 space-y-1"
               >
                 <LucideFileVideo />
-                <span class=":uno: text-xs text-gray-500 font-sans">
+                <span class=":uno: text-xs text-slate-500 font-sans">
                   {{ getExtname(media.originType) }}
                 </span>
               </div>
             </template>
             <template v-else-if="media.type == 'AUDIO'">
               <div
-                class=":uno: size-full flex flex-col items-center justify-center bg-gray-100 space-y-1"
+                class=":uno: size-full flex flex-col items-center justify-center bg-slate-100 space-y-1"
               >
                 <LucideFileAudio />
-                <span class=":uno: text-xs text-gray-500 font-sans">
+                <span class=":uno: text-xs text-slate-500 font-sans">
                   {{ getExtname(media.originType) }}
                 </span>
               </div>
@@ -199,12 +219,12 @@ defineOptions({
     </div>
 
     <div class=":uno: mt-4 flex items-center gap-3">
-      <div class=":uno: inline-flex items-center gap-1 text-gray-600 hover:text-gray-900">
+      <div class=":uno: inline-flex items-center gap-1 text-slate-600">
         <RiHeart3Line />
         <span class=":uno: text-sm">{{ moment.stats.upvote }}</span>
       </div>
       <div
-        class=":uno: group inline-flex cursor-pointer items-center gap-1 text-gray-600 hover:text-gray-900"
+        class=":uno: group inline-flex cursor-pointer items-center gap-1 text-slate-600 hover:text-slate-900"
         @click="handleOpenCommentList"
       >
         <IconMessage />

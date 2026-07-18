@@ -110,7 +110,7 @@ async function handleUnpin(item: ListedMoment) {
         list.value = list.value.filter(
           (m) => m.moment.metadata.name !== item.moment.metadata.name
         );
-        queryClient.invalidateQueries({ queryKey: ["plugin:moments:list"] });
+        queryClient.invalidateQueries({ queryKey: ["plugin:moments:console:list"] });
         emit("change");
       } catch (e) {
         console.error(e);
@@ -130,7 +130,7 @@ async function handleSave() {
       list.value.map((m) => m.moment.metadata.name)
     );
     Toast.success("置顶顺序已保存");
-    queryClient.invalidateQueries({ queryKey: ["plugin:moments:list"] });
+    queryClient.invalidateQueries({ queryKey: ["plugin:moments:console:list"] });
     emit("change");
     modalRef.value?.close();
   } catch (e) {

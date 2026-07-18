@@ -19,7 +19,7 @@ export function useTagQueryFetch(
   props: useTagQueryFetchProps
 ): ReturnType<typeof useQuery> {
   return useQuery<string[]>({
-    queryKey: ["moments-tags", props.keyword],
+    queryKey: ["moments-tags", group, props.keyword],
     queryFn: async () => {
       if (group === "console") {
         const { data } = await momentsConsoleApiClient.moment.listTags({

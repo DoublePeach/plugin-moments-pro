@@ -2,7 +2,7 @@
 import { momentsConsoleApiClient, momentsCoreApiClient } from "@/api";
 import type { Moment, MomentMedia, MomentMediaTypeEnum } from "@/api/generated";
 import MediaCard from "@/components/MediaCard.vue";
-import { useConsoleTagQueryFetch } from "@/composables/use-tag";
+import TagSelectDropdown from "@/components/TagSelectDropdown.vue";
 import { IconEye, IconEyeOff, Toast, VButton, VLoading } from "@halo-dev/components";
 import type { AttachmentLike } from "@halo-dev/ui-shared";
 import { useQueryClient } from "@tanstack/vue-query";
@@ -35,6 +35,7 @@ const emit = defineEmits<{
 }>();
 
 const queryClient = useQueryClient();
+const htmlParser = new DOMParser();
 
 const initMoment: Moment = {
   spec: {
@@ -62,7 +63,6 @@ const initMoment: Moment = {
 onMounted(async () => {
   if (props.moment) {
     formState.value = cloneDeep(props.moment);
-    // Preload upvote count for display / editing in update mode.
     try {
       const counter = await momentsConsoleApiClient.getCounter(
         props.moment.metadata.name
@@ -83,13 +83,52 @@ const isEditorEmpty = ref<boolean>(true);
 const upvoteInitial = ref<number>(0);
 const upvoteEdit = ref<number>(0);
 const upvoteChanged = computed(() => upvoteEdit.value !== upvoteInitial.value);
+
+/** 已选标签，双向绑定到 spec.tags */
+const selectedTags = computed({
+  get: () => formState.value.spec.tags || [],
+  set: (tags: string[]) => {
+    formState.value.spec.tags = tags;
+  },
+});
+
+/**
+ * 保存前清理正文中的历史 # 标签标记，标签仅通过下拉框维护。
+ */
+function stripLegacyTagsFromContent() {
+  const content = formState.value.spec.content;
+  (["raw", "html"] as const).forEach((field) => {
+    const html = content[field];
+    if (!html) {
+      return;
+    }
+    const document = htmlParser.parseFromString(html, "text/html");
+    document.querySelectorAll("a.tag").forEach((node) => node.remove());
+    content[field] = document.body.innerHTML;
+  });
+}
+
+const editorRaw = computed({
+  get: () => formState.value.spec.content.raw ?? "",
+  set: (value: string) => {
+    formState.value.spec.content.raw = value;
+  },
+});
+
+const editorHtml = computed({
+  get: () => formState.value.spec.content.html ?? "",
+  set: (value: string) => {
+    formState.value.spec.content.html = value;
+  },
+});
+
 const handlerCreateOrUpdateMoment = async () => {
   if (saveDisable.value) {
     return;
   }
   try {
     saving.value = true;
-    queryEditorTags();
+    stripLegacyTagsFromContent();
     if (isUpdateMode.value) {
       handleUpdate();
     } else {
@@ -113,7 +152,7 @@ const handleSave = async (moment: Moment) => {
     moment: moment,
   });
 
-  queryClient.invalidateQueries({ queryKey: ["plugin:moments:list"] });
+  queryClient.invalidateQueries({ queryKey: ["plugin:moments:console:list"] });
 
   Toast.success("发布成功");
 };
@@ -145,7 +184,6 @@ const handleUpdate = async () => {
     ],
   });
 
-  // Persist upvote count change separately via Counter endpoint.
   if (upvoteChanged.value) {
     const nextUpvote = Number.isFinite(upvoteEdit.value)
       ? Math.max(0, Math.floor(upvoteEdit.value))
@@ -165,24 +203,9 @@ const handleUpdate = async () => {
 
   emit("update");
 
-  queryClient.invalidateQueries({ queryKey: ["plugin:moments:list"] });
+  queryClient.invalidateQueries({ queryKey: ["plugin:moments:console:list"] });
 
   Toast.success("发布成功");
-};
-
-const parse = new DOMParser();
-const queryEditorTags = function () {
-  let tags: Set<string> = new Set();
-  let document: Document = parse.parseFromString(formState.value.spec.content.raw!, "text/html");
-  let nodeList: NodeList = document.querySelectorAll("a.tag");
-  if (nodeList) {
-    for (let tagNode of nodeList) {
-      if (tagNode.textContent) {
-        tags.add(tagNode.textContent);
-      }
-    }
-  }
-  formState.value.spec.tags = Array.from(tags);
 };
 
 const handleReset = () => {
@@ -205,9 +228,7 @@ const supportImageTypes: string[] = [
 ];
 
 const supportVideoTypes: string[] = ["video/*"];
-
 const supportAudioTypes: string[] = ["audio/*"];
-
 const accepts = [...supportImageTypes, ...supportVideoTypes, ...supportAudioTypes];
 
 const mediumWhitelist: Map<string, MomentMediaTypeEnum> = new Map([
@@ -261,7 +282,7 @@ const onAttachmentsSelect = async (attachments: AttachmentLike[]) => {
     if (!media.type) {
       return false;
     }
-    let fileType = media.type.split("/")[0];
+    const fileType = media.type.split("/")[0];
     formState.value.spec.content.medium?.push({
       type: mediumWhitelist.get(fileType),
       url: media.url,
@@ -269,6 +290,12 @@ const onAttachmentsSelect = async (attachments: AttachmentLike[]) => {
     } as MomentMedia);
   });
 };
+
+const tagsChanged = computed(() => {
+  const oldTags = [...(props.moment?.spec.tags || [])].sort().join(",");
+  const newTags = [...(formState.value.spec.tags || [])].sort().join(",");
+  return oldTags !== newTags;
+});
 
 const saveDisabledReason = computed<string | null>(() => {
   const medium = formState.value.spec.content.medium;
@@ -295,6 +322,7 @@ const saveDisabledReason = computed<string | null>(() => {
       && !visibleChanged
       && !releaseTimeChanged
       && !upvoteChanged.value
+      && !tagsChanged.value
     ) {
       return "未检测到任何修改";
     }
@@ -310,8 +338,6 @@ const saveDisabledReason = computed<string | null>(() => {
 
 const saveDisable = computed(() => saveDisabledReason.value !== null);
 
-// DatePicker 只负责日期选择，后端仍存完整 Instant；我们固定把时间设置为 12:00:00
-// 这样既避免时区跨天问题，展示也能稳定回显成用户选择的那一天。
 const releaseTimeDate = computed<Date | null>({
   get: () => {
     if (!formState.value.spec.releaseTime) return null;
@@ -365,11 +391,11 @@ const releaseTimeShortcuts = [
 ];
 
 const removeMedium = (media: MomentMedia) => {
-  let formMedium = formState.value.spec.content.medium;
+  const formMedium = formState.value.spec.content.medium;
   if (!formMedium) {
     return;
   }
-  let index: number = formMedium.indexOf(media);
+  const index: number = formMedium.indexOf(media);
   if (index > -1) {
     formMedium.splice(index, 1);
   }
@@ -387,7 +413,7 @@ const addMediumVerify = (media?: {
   displayName?: string;
   type?: string;
 }) => {
-  let formMedium = formState.value.spec.content.medium;
+  const formMedium = formState.value.spec.content.medium;
   if (!formMedium || formMedium.length == 0) {
     return true;
   }
@@ -416,7 +442,7 @@ function handleToggleVisible() {
 </script>
 
 <template>
-  <div class=":uno: card shrink overflow-hidden border rounded-md bg-white">
+  <div class=":uno: moment-compose-card shrink overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
     <AttachmentSelectorModal
       v-model:visible="attachmentSelectorModal"
       v-permission="['system:attachments:view']"
@@ -426,35 +452,36 @@ function handleToggleVisible() {
       @select="onAttachmentsSelect"
     />
     <TextEditor
-      v-model:raw="formState.spec.content.raw"
-      v-model:html="formState.spec.content.html"
+      v-model:raw="editorRaw"
+      v-model:html="editorHtml"
       v-model:isEmpty="isEditorEmpty"
-      :tag-query-fetch="useConsoleTagQueryFetch"
       class=":uno: min-h-[9rem]"
       tabindex="-1"
       @submit="handlerCreateOrUpdateMoment"
     />
-    <div v-if="formState.spec.content.medium?.length" class=":uno: img-box flex px-3.5 py-2">
-      <ul class=":uno: grid grid-cols-3 w-full gap-1.5 sm:w-1/2" role="list">
+    <div v-if="formState.spec.content.medium?.length" class=":uno: img-box flex px-4 py-2">
+      <ul class=":uno: grid grid-cols-3 w-full gap-2 sm:w-1/2" role="list">
         <li
           v-for="(media, index) in formState.spec.content.medium"
           :key="index"
-          class=":uno: inline-block overflow-hidden border rounded-md"
+          class=":uno: inline-block overflow-hidden rounded-lg border border-slate-200"
         >
           <MediaCard :media="media" @remove="removeMedium"></MediaCard>
         </li>
       </ul>
     </div>
-    <div class=":uno: flex justify-between bg-white px-3.5 py-2">
-      <div class=":uno: flex items-center space-x-2">
-        <div
-          class=":uno: group flex cursor-pointer items-center justify-center rounded-full p-2 hover:bg-sky-600/10"
+    <div class=":uno: moment-compose-toolbar flex justify-between border-t border-slate-100 bg-slate-50/80 px-4 py-2.5">
+      <div class=":uno: flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          aria-label="添加附件"
+          class=":uno: group flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-transparent transition-colors duration-200 hover:border-blue-200 hover:bg-blue-50"
+          @click="addMediumVerify() && (attachmentSelectorModal = true)"
         >
           <TablerPhoto
-            class=":uno: size-full text-base text-gray-600 group-hover:text-sky-600"
-            @click="addMediumVerify() && (attachmentSelectorModal = true)"
+            class=":uno: size-4 text-slate-500 transition-colors group-hover:text-blue-600"
           />
-        </div>
+        </button>
         <DatePicker
           v-model:value="releaseTimeDate"
           v-tooltip="{ content: '发布日期' }"
@@ -467,56 +494,60 @@ function handleToggleVisible() {
           input-class=":uno: mx-input rounded moment-release-time-input"
           class=":uno: date-picker release-time-picker max-w-[10rem] cursor-pointer"
         />
+        <TagSelectDropdown v-model="selectedTags" />
         <div
           v-if="isUpdateMode"
           v-tooltip="{ content: '点赞数（可手动修改）' }"
-          class=":uno: upvote-edit inline-flex h-7 items-center gap-1 rounded border bg-gray-50 px-2 text-xs text-gray-600 focus-within:border-sky-500 w-40"
-          :class="upvoteChanged ? ':uno: border-sky-500 bg-sky-50' : ''"
+          class=":uno: upvote-edit inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-600 transition-colors focus-within:border-blue-500 w-40"
+          :class="upvoteChanged ? ':uno: border-blue-500 bg-blue-50' : ''"
         >
           <MingcuteHeartFill
             class=":uno: text-sm"
-            :class="upvoteChanged ? ':uno: text-red-500' : ':uno: text-gray-400'"
+            :class="upvoteChanged ? ':uno: text-red-500' : ':uno: text-slate-400'"
           />
           <input
             v-model.number="upvoteEdit"
             type="number"
             min="0"
             step="1"
+            aria-label="点赞数"
             class=":uno: w-12 border-0 bg-transparent text-xs outline-none"
             @keydown.stop
           />
         </div>
       </div>
 
-      <div class=":uno: flex items-center space-x-2.5">
-        <div
+      <div class=":uno: flex items-center gap-2">
+        <button
+          type="button"
           v-tooltip="{
             content: formState.spec.visible === 'PRIVATE' ? `私有访问` : '公开访问',
           }"
-          class=":uno: group flex cursor-pointer items-center justify-center rounded-full p-2"
+          class=":uno: group flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-transparent transition-colors duration-200"
           :class="
             formState.spec.visible === 'PRIVATE'
-              ? ':uno: hover:bg-red-600/10'
-              : ':uno: hover:bg-green-600/10'
+              ? ':uno: hover:border-red-200 hover:bg-red-50'
+              : ':uno: hover:border-emerald-200 hover:bg-emerald-50'
           "
           @click="handleToggleVisible()"
         >
           <IconEyeOff
             v-if="formState.spec.visible === 'PRIVATE'"
-            class=":uno: size-full text-base text-gray-600 group-hover:text-red-600"
+            class=":uno: size-4 text-slate-500 transition-colors group-hover:text-red-600"
           />
           <IconEye
             v-else
-            class=":uno: size-full text-base text-gray-600 group-hover:text-green-600"
+            class=":uno: size-4 text-slate-500 transition-colors group-hover:text-emerald-600"
           />
-        </div>
+        </button>
 
         <button
           v-if="isUpdateMode"
-          class=":uno: h-7 inline-flex cursor-pointer items-center rounded px-3 text-gray-600 hover:bg-sky-600/10 hover:text-sky-600"
+          type="button"
+          class=":uno: h-8 inline-flex cursor-pointer items-center rounded-lg px-3 text-sm text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
           @click="handlerCancel"
         >
-          <span class=":uno: text-xs"> 取消 </span>
+          取消
         </button>
 
         <div
@@ -548,12 +579,15 @@ function handleToggleVisible() {
     padding: 0 1.75rem 0 0.5rem;
     font-size: 0.75rem;
     border-radius: 0.375rem;
-    color: #4b5563;
+    color: #475569;
+    border-color: #e2e8f0;
     box-shadow: none;
+    transition: border-color 0.2s ease;
   }
 
-  .mx-input:hover {
-    border-color: #0284c7;
+  .mx-input:hover,
+  .mx-input:focus {
+    border-color: #2563eb;
   }
 
   .mx-icon-calendar,

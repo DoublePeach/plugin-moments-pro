@@ -1,18 +1,7 @@
 .moments-content {
-  a {
-    &.tag {
-      color: rgba(var(--colors-primary), 1);
-      cursor: pointer;
-      background-color: #eef3fe;
-      padding: 1px 4px;
-      font-size: 12px;
-      border-radius: 3px;
-      display: inline-block;
-      white-space: nowrap;
-
-      &::before {
-        content: "#";
-      }
+  .moment-admin-tag {
+    &::before {
+      content: none;
     }
   }
 
@@ -106,19 +95,20 @@
       padding-left: 0.75rem;
       padding-right: 2rem;
       height: 100%;
-      border: 1px solid rgb(209 213 219);
+      border: 1px solid #e2e8f0;
       box-shadow: none;
       font-size: 0.875rem;
       line-height: 1.25rem;
-      color: black;
+      color: #334155;
       cursor: pointer;
+      transition: border-color 0.2s ease;
 
       &:focus {
-        border-color: #4ccba0;
+        border-color: #2563eb;
       }
 
       &:hover {
-        border: 1px solid rgb(209 213 219);
+        border-color: #cbd5e1;
       }
     }
 

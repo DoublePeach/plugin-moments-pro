@@ -1,6 +1,7 @@
 package run.halo.moments.finders.impl;
 
 import jakarta.annotation.Nonnull;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -11,11 +12,13 @@ import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.ListResult;
 import run.halo.app.extension.PageRequest;
 import run.halo.app.extension.ReactiveExtensionClient;
+import run.halo.app.infra.utils.JsonUtils;
 import run.halo.moments.Moment;
 import run.halo.moments.ReactiveQueryMomentPredicateResolver;
 import run.halo.moments.Stats;
 import run.halo.moments.finders.MomentPublicQueryService;
 import run.halo.moments.util.MeterUtils;
+import run.halo.moments.util.MomentTagContentUtils;
 import run.halo.moments.vo.ContributorVo;
 import run.halo.moments.vo.MomentVo;
 import java.util.List;
@@ -72,7 +75,28 @@ public class MomentPublicQueryServiceImpl implements MomentPublicQueryService {
                     .doOnNext(mv::setOwner)
                     .thenReturn(mv);
             })
+            .map(mv -> sanitizePublicTags(mv, moment))
             .defaultIfEmpty(momentVo);
+    }
+
+    /**
+     * Strip tags from public-facing moment payloads. Tags are admin-only metadata.
+     */
+    private MomentVo sanitizePublicTags(MomentVo momentVo, Moment moment) {
+        Moment.MomentSpec specCopy = JsonUtils.mapper()
+            .convertValue(moment.getSpec(), Moment.MomentSpec.class);
+        specCopy.setTags(Set.of());
+        var content = specCopy.getContent();
+        if (content != null) {
+            if (content.getHtml() != null) {
+                content.setHtml(MomentTagContentUtils.stripAllTagsFromHtml(content.getHtml()));
+            }
+            if (content.getRaw() != null) {
+                content.setRaw(MomentTagContentUtils.stripAllTagsFromHtml(content.getRaw()));
+            }
+        }
+        momentVo.setSpec(specCopy);
+        return momentVo;
     }
 
     private Mono<Stats> populateStats(MomentVo momentVo) {

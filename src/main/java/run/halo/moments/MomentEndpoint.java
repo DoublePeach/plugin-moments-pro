@@ -15,9 +15,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.springdoc.core.fn.builders.schema.Builder;
 import org.springdoc.webflux.core.fn.SpringdocRouteBuilder;
 import org.springframework.http.MediaType;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.ReactiveSecurityContextHolder;
-import org.springframework.security.core.context.SecurityContext;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerRequest;
@@ -27,6 +24,9 @@ import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
 import run.halo.app.extension.ListResult;
 import run.halo.moments.service.MomentService;
+import run.halo.moments.service.MomentTagService;
+import run.halo.moments.vo.MomentTagVo;
+import run.halo.moments.vo.TagMutationResult;
 
 /**
  * A custom endpoint for {@link run.halo.moments.Moment}.
@@ -39,6 +39,8 @@ import run.halo.moments.service.MomentService;
 public class MomentEndpoint implements CustomEndpoint {
 
     private final MomentService momentService;
+
+    private final MomentTagService momentTagService;
 
     @Override
     public RouterFunction<ServerResponse> endpoint() {
@@ -81,6 +83,48 @@ public class MomentEndpoint implements CustomEndpoint {
                     .response(responseBuilder()
                         .implementationArray(String.class)
                     ))
+            .GET("tag-stats", this::listTagStats,
+                builder -> builder.operationId("ListTagStats")
+                    .description("List all moment tags with stats.")
+                    .tag(tag)
+                    .parameter(parameterBuilder()
+                        .name("name")
+                        .in(ParameterIn.QUERY)
+                        .description("Tag name to query")
+                        .required(false)
+                        .implementation(String.class)
+                    )
+                    .response(responseBuilder()
+                        .implementationArray(MomentTagVo.class)
+                    ))
+            .POST("tags/-/rename", this::renameTag,
+                builder -> builder.operationId("RenameMomentTag")
+                    .description("Rename a moment tag across all related moments.")
+                    .tag(tag)
+                    .requestBody(requestBodyBuilder()
+                        .required(true)
+                        .content(contentBuilder()
+                            .mediaType(MediaType.APPLICATION_JSON_VALUE)
+                            .schema(Builder.schemaBuilder()
+                                .implementation(RenameTagRequest.class))
+                        ))
+                    .response(responseBuilder()
+                        .implementation(TagMutationResult.class))
+            )
+            .POST("tags/-/delete", this::deleteTag,
+                builder -> builder.operationId("DeleteMomentTag")
+                    .description("Delete a moment tag from all related moments.")
+                    .tag(tag)
+                    .requestBody(requestBodyBuilder()
+                        .required(true)
+                        .content(contentBuilder()
+                            .mediaType(MediaType.APPLICATION_JSON_VALUE)
+                            .schema(Builder.schemaBuilder()
+                                .implementation(DeleteTagRequest.class))
+                        ))
+                    .response(responseBuilder()
+                        .implementation(TagMutationResult.class))
+            )
             .POST("moments", this::createMoment,
                 builder -> builder.operationId("CreateMoment")
                     .description("Create a Moment.")
@@ -205,12 +249,38 @@ public class MomentEndpoint implements CustomEndpoint {
 
     private Mono<ServerResponse> listMyTags(ServerRequest request) {
         String name = request.queryParam("name").orElse(null);
-        return getCurrentUser()
-            .map(username -> new MomentQuery(request.exchange(), username))
-            .flatMapMany(momentService::listAllTags)
+        MomentQuery query = new MomentQuery(request.exchange());
+        return momentService.listAllTags(query)
             .filter(tagName -> StringUtils.isBlank(name) || StringUtils.containsIgnoreCase(tagName,
                 name))
             .collectList()
+            .flatMap(result -> ServerResponse.ok().bodyValue(result));
+    }
+
+    private Mono<ServerResponse> listTagStats(ServerRequest request) {
+        String name = request.queryParam("name").orElse(null);
+        MomentQuery query = new MomentQuery(request.exchange());
+        return momentTagService.listTagStats(query)
+            .map(tags -> {
+                if (StringUtils.isBlank(name)) {
+                    return tags;
+                }
+                return tags.stream()
+                    .filter(tag -> StringUtils.containsIgnoreCase(tag.getName(), name))
+                    .toList();
+            })
+            .flatMap(result -> ServerResponse.ok().bodyValue(result));
+    }
+
+    private Mono<ServerResponse> renameTag(ServerRequest request) {
+        return request.bodyToMono(RenameTagRequest.class)
+            .flatMap(body -> momentTagService.renameTag(body.getOldName(), body.getNewName()))
+            .flatMap(result -> ServerResponse.ok().bodyValue(result));
+    }
+
+    private Mono<ServerResponse> deleteTag(ServerRequest request) {
+        return request.bodyToMono(DeleteTagRequest.class)
+            .flatMap(body -> momentTagService.deleteTag(body.getName()))
             .flatMap(result -> ServerResponse.ok().bodyValue(result));
     }
 
@@ -253,12 +323,6 @@ public class MomentEndpoint implements CustomEndpoint {
                 .flatMap(count -> ServerResponse.ok().bodyValue(Map.of("updated", count))));
     }
 
-    private Mono<String> getCurrentUser() {
-        return ReactiveSecurityContextHolder.getContext()
-            .map(SecurityContext::getAuthentication)
-            .map(Authentication::getName);
-    }
-
     @Data
     public static class NamesRequest {
         private List<String> names;
@@ -268,5 +332,16 @@ public class MomentEndpoint implements CustomEndpoint {
     public static class VisibleBatchRequest {
         private List<String> names;
         private Moment.MomentVisible visible;
+    }
+
+    @Data
+    public static class RenameTagRequest {
+        private String oldName;
+        private String newName;
+    }
+
+    @Data
+    public static class DeleteTagRequest {
+        private String name;
     }
 }

@@ -6,7 +6,6 @@ import static org.springdoc.core.fn.builders.parameter.Builder.parameterBuilder;
 import static org.springdoc.core.fn.builders.requestbody.Builder.requestBodyBuilder;
 
 import java.time.Instant;
-import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
 import org.springdoc.core.fn.builders.schema.Builder;
@@ -32,8 +31,6 @@ import run.halo.moments.ListedMoment;
 import run.halo.moments.Moment;
 import run.halo.moments.MomentQuery;
 import run.halo.moments.service.MomentService;
-import run.halo.moments.service.RoleService;
-import run.halo.moments.util.AuthorityUtils;
 
 /**
  * A custom endpoint for {@link run.halo.moments.Moment}.
@@ -46,8 +43,6 @@ import run.halo.moments.util.AuthorityUtils;
 public class UcMomentEndpoint implements CustomEndpoint {
 
     private final MomentService momentService;
-
-    private final RoleService roleService;
 
     @Override
     public RouterFunction<ServerResponse> endpoint() {
@@ -157,8 +152,8 @@ public class UcMomentEndpoint implements CustomEndpoint {
                         Moment.MomentSpec newSpec = newMoment.getSpec();
                         newSpec.setOwner(oldSpec.getOwner());
                         newSpec.setReleaseTime(oldSpec.getReleaseTime());
-                        // Every update needs to be re-reviewed.
-                        newSpec.setApproved(false);
+                        newSpec.setApproved(true);
+                        newSpec.setApprovedTime(Instant.now());
                     })
                     .flatMap(momentService::updateBy);
             })
@@ -184,21 +179,11 @@ public class UcMomentEndpoint implements CustomEndpoint {
     private Mono<ServerResponse> createMyMoment(ServerRequest request) {
         return getCurrentUser()
             .flatMap(user -> request.bodyToMono(Moment.class)
-                .flatMap(post -> {
-                    post.getSpec().setApproved(false);
+                .map(post -> {
+                    post.getSpec().setApproved(true);
+                    post.getSpec().setApprovedTime(Instant.now());
                     post.getSpec().setOwner(user.getName());
-                    var roles = AuthorityUtils.authoritiesToRoles(user.getAuthorities());
-                    return roleService.joint(roles,
-                            Set.of(AuthorityUtils.MOMENT_PUBLISH_APPROVAL_ROLE_NAME,
-                                AuthorityUtils.SUPER_ROLE_NAME))
-                        .doOnNext(result -> {
-                            if (result) {
-                                // If it is a user with audit authority, there is no need to review.
-                                post.getSpec().setApproved(true);
-                                post.getSpec().setApprovedTime(Instant.now());
-                            }
-                        })
-                        .thenReturn(post);
+                    return post;
                 })
             )
             .flatMap(momentService::create)

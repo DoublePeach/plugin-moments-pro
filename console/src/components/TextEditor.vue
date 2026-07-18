@@ -1,6 +1,4 @@
 <script lang="ts" setup>
-import type { useTagQueryFetchProps } from "@/composables/use-tag";
-import { TagsExtension } from "@/extensions/tags";
 import { consoleApiClient, ucApiClient } from "@halo-dev/api-client";
 import { VLoading } from "@halo-dev/components";
 import {
@@ -10,7 +8,6 @@ import {
   type Extensions,
 } from "@halo-dev/richtext-editor";
 import { utils, type PluginModule } from "@halo-dev/ui-shared";
-import type { UseQueryReturnType } from "@tanstack/vue-query";
 import type { AxiosRequestConfig } from "axios";
 import { onMounted, ref, shallowRef, watch } from "vue";
 
@@ -19,7 +16,6 @@ const props = withDefaults(
     html: string;
     raw: string;
     isEmpty: boolean;
-    tagQueryFetch: (props: useTagQueryFetchProps) => UseQueryReturnType<unknown, unknown>;
   }>(),
   {
     html: "",
@@ -39,12 +35,6 @@ const emit = defineEmits<{
 const editor = shallowRef<VueEditor>();
 
 const supportedPluginNames = ["editor-hyperlink-card", "hybrid-edit-block", "shiki"];
-
-const customExtensions = [
-  TagsExtension.configure({
-    tagQueryFetch: props.tagQueryFetch,
-  }),
-];
 
 const isInitialized = ref(false);
 
@@ -94,7 +84,7 @@ onMounted(async () => {
         gallery: {
           uploadImage: handleUpload,
         },
-        customExtensions: [...customExtensions, ...extensionsFromPlugins],
+        customExtensions: [...extensionsFromPlugins],
       }),
     ],
     editorProps: {

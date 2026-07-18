@@ -2,7 +2,7 @@
 import { momentsUcApiClient } from "@/api";
 import type { Moment, MomentMedia, MomentMediaTypeEnum } from "@/api/generated";
 import MediaCard from "@/components/MediaCard.vue";
-import { useUCTagQueryFetch } from "@/composables/use-tag";
+import TagSelectDropdown from "@/components/TagSelectDropdown.vue";
 import { IconEye, IconEyeOff, Toast, VButton, VLoading } from "@halo-dev/components";
 import type { AttachmentLike } from "@halo-dev/ui-shared";
 import { useQueryClient } from "@tanstack/vue-query";
@@ -34,6 +34,7 @@ const emit = defineEmits<{
 }>();
 
 const queryClient = useQueryClient();
+const htmlParser = new DOMParser();
 
 const initMoment: Moment = {
   spec: {
@@ -69,13 +70,48 @@ const saving = ref<boolean>(false);
 const attachmentSelectorModal = ref(false);
 const isUpdateMode = computed(() => !!formState.value.metadata.creationTimestamp);
 const isEditorEmpty = ref<boolean>(true);
+
+const selectedTags = computed({
+  get: () => formState.value.spec.tags || [],
+  set: (tags: string[]) => {
+    formState.value.spec.tags = tags;
+  },
+});
+
+function stripLegacyTagsFromContent() {
+  const content = formState.value.spec.content;
+  (["raw", "html"] as const).forEach((field) => {
+    const html = content[field];
+    if (!html) {
+      return;
+    }
+    const document = htmlParser.parseFromString(html, "text/html");
+    document.querySelectorAll("a.tag").forEach((node) => node.remove());
+    content[field] = document.body.innerHTML;
+  });
+}
+
+const editorRaw = computed({
+  get: () => formState.value.spec.content.raw ?? "",
+  set: (value: string) => {
+    formState.value.spec.content.raw = value;
+  },
+});
+
+const editorHtml = computed({
+  get: () => formState.value.spec.content.html ?? "",
+  set: (value: string) => {
+    formState.value.spec.content.html = value;
+  },
+});
+
 const handlerCreateOrUpdateMoment = async () => {
   if (saveDisable.value) {
     return;
   }
   try {
     saving.value = true;
-    queryEditorTags();
+    stripLegacyTagsFromContent();
     if (isUpdateMode.value) {
       handleUpdate(formState.value);
     } else {
@@ -99,7 +135,7 @@ const handleSave = async (moment: Moment) => {
     moment: moment,
   });
 
-  queryClient.invalidateQueries(["plugin:moments:list"]);
+  queryClient.invalidateQueries(["plugin:moments:uc:list"]);
 
   Toast.success("发布成功");
 };
@@ -118,24 +154,9 @@ const handleUpdate = async (moment: Moment) => {
 
   emit("update");
 
-  queryClient.invalidateQueries(["plugin:moments:list"]);
+  queryClient.invalidateQueries(["plugin:moments:uc:list"]);
 
   Toast.success("发布成功");
-};
-
-const parse = new DOMParser();
-const queryEditorTags = function () {
-  let tags: Set<string> = new Set();
-  let document: Document = parse.parseFromString(formState.value.spec.content.raw!, "text/html");
-  let nodeList: NodeList = document.querySelectorAll("a.tag");
-  if (nodeList) {
-    for (let tagNode of nodeList) {
-      if (tagNode.textContent) {
-        tags.add(tagNode.textContent);
-      }
-    }
-  }
-  formState.value.spec.tags = Array.from(tags);
 };
 
 const handleReset = () => {
@@ -223,6 +244,12 @@ const onAttachmentsSelect = async (attachments: AttachmentLike[]) => {
   });
 };
 
+const tagsChanged = computed(() => {
+  const oldTags = [...(props.moment?.spec.tags || [])].sort().join(",");
+  const newTags = [...(formState.value.spec.tags || [])].sort().join(",");
+  return oldTags !== newTags;
+});
+
 const saveDisabledReason = computed<string | null>(() => {
   const medium = formState.value.spec.content.medium;
   const hasValidMedium = !!medium && medium.length > 0 && medium.length <= 9;
@@ -243,7 +270,7 @@ const saveDisabledReason = computed<string | null>(() => {
     const contentChanged = hasContent || hasValidMedium;
     const visibleChanged = oldVisible !== formState.value.spec.visible;
     const releaseTimeChanged = oldReleaseTime !== formState.value.spec.releaseTime;
-    if (!contentChanged && !visibleChanged && !releaseTimeChanged) {
+    if (!contentChanged && !visibleChanged && !releaseTimeChanged && !tagsChanged.value) {
       return "未检测到任何修改";
     }
     return null;
@@ -372,10 +399,9 @@ function handleToggleVisible() {
       @select="onAttachmentsSelect"
     />
     <TextEditor
-      v-model:raw="formState.spec.content.raw"
-      v-model:html="formState.spec.content.html"
+      v-model:raw="editorRaw"
+      v-model:html="editorHtml"
       v-model:isEmpty="isEditorEmpty"
-      :tag-query-fetch="useUCTagQueryFetch"
       class=":uno: min-h-[9rem]"
       tabindex="-1"
       @submit="handlerCreateOrUpdateMoment"
@@ -413,6 +439,7 @@ function handleToggleVisible() {
           input-class=":uno: mx-input rounded moment-release-time-input"
           class=":uno: date-picker release-time-picker max-w-[10rem] cursor-pointer"
         />
+        <TagSelectDropdown v-model="selectedTags" scope="uc" />
       </div>
 
       <div class=":uno: flex items-center space-x-2.5">

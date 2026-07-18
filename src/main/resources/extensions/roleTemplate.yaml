@@ -14,7 +14,7 @@ rules:
     resources: ["moments"]
     verbs: ["get", "list"]
   - apiGroups: ["console.api.moment.halo.run"]
-    resources: ["moments", "tags"]
+    resources: ["moments", "tags", "tag-stats"]
     verbs: ["get", "list"]
 ---
 apiVersion: v1alpha1
@@ -35,7 +35,7 @@ rules:
     resources: ["moments"]
     verbs: ["create", "patch", "update", "delete", "deletecollection"]
   - apiGroups: ["console.api.moment.halo.run"]
-    resources: ["moments", "tags"]
+    resources: ["moments", "tags", "tag-stats"]
     verbs: ["create", "patch", "update", "delete", "deletecollection"]
 ---
 apiVersion: v1alpha1
@@ -51,7 +51,7 @@ metadata:
       ["uc:plugin:moments:publish"]
 rules:
   - apiGroups: ["uc.api.moment.halo.run"]
-    resources: ["moments", "tags"]
+    resources: ["moments", "tags", "tag-stats"]
     verbs: ["get", "list", "create", "update"]
 ---
 apiVersion: v1alpha1
@@ -81,7 +81,7 @@ metadata:
       ["uc:plugin:moments:delete"]
 rules:
   - apiGroups: ["uc.api.moment.halo.run"]
-    resources: ["moments", "tags"]
+    resources: ["moments", "tags", "tag-stats"]
     verbs: ["delete", "deletecollection"]
 ---
 apiVersion: v1alpha1
