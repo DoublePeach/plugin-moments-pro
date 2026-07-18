@@ -27,6 +27,7 @@ jobs:
 
       - name: Build Plugin
         run: |
+          chmod +x gradlew
           version="${GITHUB_REF_NAME#v}"
           ./gradlew clean build -x check -Pversion="${version}"
 
