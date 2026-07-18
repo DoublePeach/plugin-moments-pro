@@ -75,14 +75,18 @@ public class MomentPublicQueryServiceImpl implements MomentPublicQueryService {
                     .doOnNext(mv::setOwner)
                     .thenReturn(mv);
             })
-            .map(mv -> sanitizePublicTags(mv, moment))
+            .map(mv -> sanitizePinnedTags(mv, moment))
             .defaultIfEmpty(momentVo);
     }
 
     /**
-     * Strip tags from public-facing moment payloads. Tags are admin-only metadata.
+     * Strip tags from pinned moments on public-facing payloads only.
+     * Non-pinned moments keep tags for frontend category display and filtering.
      */
-    private MomentVo sanitizePublicTags(MomentVo momentVo, Moment moment) {
+    private MomentVo sanitizePinnedTags(MomentVo momentVo, Moment moment) {
+        if (!moment.isPinned()) {
+            return momentVo;
+        }
         Moment.MomentSpec specCopy = JsonUtils.mapper()
             .convertValue(moment.getSpec(), Moment.MomentSpec.class);
         specCopy.setTags(Set.of());

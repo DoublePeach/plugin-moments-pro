@@ -173,7 +173,7 @@ defineOptions({
         class=":uno: moment-admin-tag inline-flex cursor-pointer items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs text-blue-700 transition-colors duration-200 hover:bg-blue-100"
         @click="handleTagFilter(tagName)"
       >
-        #{{ tagName }}
+        {{ tagName }}
       </button>
     </div>
 

@@ -1,10 +1,17 @@
 import type { Extension } from "@halo-dev/api-client";
 import { type CommentSubjectRefResult, definePlugin, utils } from "@halo-dev/ui-shared";
+import { VLoading } from "@halo-dev/components";
 import "uno.css";
-import { markRaw } from "vue";
+import { defineAsyncComponent, markRaw } from "vue";
 import MingcuteMomentsLine from "~icons/mingcute/moment-line";
 import type { Moment } from "./api/generated";
 import "./styles/index.scss";
+
+/** 标签管理页异步组件，避免在插件入口同步加载导致控制台 bundle 初始化失败 */
+const TagsManagePage = defineAsyncComponent({
+  loader: () => import("@/views/TagsManage.vue"),
+  loadingComponent: VLoading,
+});
 
 export default definePlugin({
   components: {},
@@ -30,7 +37,7 @@ export default definePlugin({
       route: {
         path: "/moments/tags",
         name: "MomentTags",
-        component: () => import("@/views/TagsManage.vue"),
+        component: TagsManagePage,
         meta: {
           permissions: ["plugin:moments:view"],
         },

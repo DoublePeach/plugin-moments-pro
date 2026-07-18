@@ -194,7 +194,7 @@ const handleJumpToFrontDesk = () => {
 };
 
 const handleOpenTagManage = () => {
-  router.push({ name: "MomentTags" });
+  router.push({ path: "/moments/tags" });
 };
 
 const pinnedModalVisible = ref(false);
@@ -368,7 +368,7 @@ usePluginShikiScriptLoader();
               v-if="tag"
               class=":uno: mt-1 flex items-center justify-between rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-800"
             >
-              <span>当前标签：#{{ tag }}</span>
+              <span>当前标签：{{ tag }}</span>
               <button
                 type="button"
                 class=":uno: cursor-pointer text-[11px] text-blue-600 hover:text-blue-800"

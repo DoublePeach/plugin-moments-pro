@@ -17,7 +17,7 @@ spec:
   repo: https://github.com/halo-sigs/plugin-moments
   issues: https://github.com/halo-sigs/plugin-moments/issues
   displayName: "瞬间"
-  description: "Halo 2.x 瞬间管理插件 v3.0：轻量图文动态发布，后台标签下拉管理、置顶、批量操作、点赞数初始化；前台不展示标签，专注内容时间线体验。"
+  description: "Halo 2.x 瞬间管理插件 v3.0：轻量图文动态发布，后台标签下拉管理、置顶、批量操作、点赞数初始化；置顶瞬间前台不展示标签，普通瞬间与标签分类正常展示。"
   pluginDependencies:
     "PluginFeed?": ">=1.4.0"
   license:

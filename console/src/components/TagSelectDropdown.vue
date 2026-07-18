@@ -51,10 +51,19 @@ const { data: tags, refetch } = tagQueryFetch({
 
 const tagList = computed<string[]>(() => (tags.value as string[] | undefined) ?? []);
 
+/**
+ * 规范化标签名称，去除首尾空白与开头的井号。
+ * @param tagName 原始标签名称
+ * @returns 规范化后的标签名称
+ */
+function normalizeTagName(tagName: string): string {
+  return tagName.trim().replace(/^#+/, "");
+}
+
 /** 根据关键词过滤后的标签候选 */
 const searchResults = computed(() => {
   const list = tagList.value;
-  const query = keyword.value?.trim().toLowerCase();
+  const query = normalizeTagName(keyword.value || "").toLowerCase();
   if (!query) {
     return list;
   }
@@ -63,7 +72,7 @@ const searchResults = computed(() => {
 
 /** 是否可基于当前关键词创建新标签 */
 const canCreateTag = computed(() => {
-  const value = keyword.value?.trim();
+  const value = normalizeTagName(keyword.value || "");
   if (!value || !props.allowCreate) {
     return false;
   }
@@ -88,11 +97,15 @@ const triggerLabel = computed(() => {
  * @param tagName 标签名称
  */
 function toggleTag(tagName: string) {
+  const normalizedTagName = normalizeTagName(tagName);
+  if (!normalizedTagName) {
+    return;
+  }
   const next = new Set(props.modelValue);
-  if (next.has(tagName)) {
-    next.delete(tagName);
+  if (next.has(normalizedTagName)) {
+    next.delete(normalizedTagName);
   } else {
-    next.add(tagName);
+    next.add(normalizedTagName);
   }
   emit("update:modelValue", Array.from(next));
 }
@@ -101,7 +114,7 @@ function toggleTag(tagName: string) {
  * 通过搜索关键词创建并选中标签。
  */
 function createTagFromKeyword() {
-  const value = keyword.value?.trim();
+  const value = normalizeTagName(keyword.value || "");
   if (!value || !canCreateTag.value) {
     return;
   }
@@ -171,7 +184,7 @@ function clearAllTags(event: Event) {
             class=":uno: inline-flex cursor-pointer items-center gap-0.5 rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700 transition-colors hover:bg-blue-100"
             @click="toggleTag(selectedTag)"
           >
-            <span>#{{ selectedTag }}</span>
+            <span>{{ selectedTag }}</span>
             <IconClose class=":uno: size-3" />
           </button>
         </div>
@@ -182,7 +195,7 @@ function clearAllTags(event: Event) {
             class=":uno: w-full cursor-pointer border-b border-slate-50 px-3 py-2 text-left text-sm text-blue-600 transition-colors hover:bg-blue-50"
             @click="createTagFromKeyword"
           >
-            创建标签「{{ keyword?.trim() }}」
+            创建标签「{{ normalizeTagName(keyword || "") }}」
           </button>
           <VEntityContainer v-if="searchResults.length">
             <VEntity
@@ -195,7 +208,7 @@ function clearAllTags(event: Event) {
               <template #start>
                 <VEntityField>
                   <template #title>
-                    <span class=":uno: text-sm">#{{ tag }}</span>
+                    <span class=":uno: text-sm">{{ tag }}</span>
                   </template>
                 </VEntityField>
               </template>

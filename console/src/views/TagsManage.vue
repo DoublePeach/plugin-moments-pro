@@ -111,7 +111,7 @@ function handleView(tag: MomentTagVo) {
 }
 
 function handleBack() {
-  router.push({ name: "Moments" });
+  router.push({ path: "/moments" });
 }
 </script>
 
@@ -147,7 +147,7 @@ function handleBack() {
       <VEmpty
         v-else-if="!tags || tags.length === 0"
         title="暂无标签"
-        message="在瞬间正文中输入 #标签 后会自动出现在这里。"
+        message="发布瞬间时选择标签后，会出现在这里。"
       />
 
       <div v-else class=":uno: overflow-hidden rounded-lg border">
@@ -161,7 +161,7 @@ function handleBack() {
           </thead>
           <tbody class=":uno: divide-y divide-gray-100">
             <tr v-for="tag in tags" :key="tag.name" class=":uno: bg-white hover:bg-gray-50">
-              <td class=":uno: px-4 py-3 font-medium">#{{ tag.name }}</td>
+              <td class=":uno: px-4 py-3 font-medium">{{ tag.name }}</td>
               <td class=":uno: px-4 py-3 text-gray-600">{{ tag.momentCount }}</td>
               <td class=":uno: px-4 py-3">
                 <div class=":uno: flex items-center justify-end gap-2">
