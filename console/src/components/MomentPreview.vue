@@ -89,10 +89,12 @@ const getExtname = (type?: string) => {
   return "";
 };
 
+const upvoteCount = computed(() => props.moment.stats?.upvote ?? 0);
+
 const commentText = computed(() => {
   const { totalComment, approvedComment } = props.moment.stats || {};
 
-  let text = totalComment || "0";
+  let text = String(totalComment ?? 0);
 
   const pendingComments = (totalComment || 0) - (approvedComment || 0);
 
@@ -218,17 +220,17 @@ defineOptions({
       </ul>
     </div>
 
-    <div class=":uno: mt-4 flex items-center gap-3">
-      <div class=":uno: inline-flex items-center gap-1 text-slate-600">
-        <RiHeart3Line />
-        <span class=":uno: text-sm">{{ moment.stats.upvote }}</span>
+    <div class=":uno: mt-3 flex items-center gap-3 text-xs text-slate-500">
+      <div class=":uno: inline-flex items-center gap-1">
+        <RiHeart3Line class=":uno: size-3.5" />
+        <span>{{ upvoteCount }}</span>
       </div>
       <div
-        class=":uno: group inline-flex cursor-pointer items-center gap-1 text-slate-600 hover:text-slate-900"
+        class=":uno: group inline-flex cursor-pointer items-center gap-1 hover:text-slate-700"
         @click="handleOpenCommentList"
       >
-        <IconMessage />
-        <span class=":uno: text-sm group-hover:underline">{{ commentText }}</span>
+        <IconMessage class=":uno: size-3.5" />
+        <span class=":uno: group-hover:underline">{{ commentText }}</span>
       </div>
     </div>
 

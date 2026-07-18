@@ -84,6 +84,48 @@ const upvoteInitial = ref<number>(0);
 const upvoteEdit = ref<number>(0);
 const upvoteChanged = computed(() => upvoteEdit.value !== upvoteInitial.value);
 
+/** 点赞数输入框展示值，避免 number 类型在窄容器内显示异常 */
+const upvoteInput = computed({
+  get: () => (upvoteEdit.value === 0 ? "" : String(upvoteEdit.value)),
+  set: (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      upvoteEdit.value = 0;
+      return;
+    }
+    upvoteEdit.value = normalizeUpvote(trimmed);
+  },
+});
+
+/** 将点赞数规范为非负整数 */
+function normalizeUpvote(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+  return Math.max(0, Math.floor(parsed));
+}
+
+/** 发布或更新后同步点赞数 */
+async function persistUpvote(momentName: string) {
+  const nextUpvote = normalizeUpvote(upvoteEdit.value);
+  if (!isUpdateMode.value && nextUpvote === 0) {
+    return;
+  }
+  if (isUpdateMode.value && !upvoteChanged.value) {
+    return;
+  }
+  try {
+    await momentsConsoleApiClient.setUpvote(momentName, nextUpvote);
+    upvoteInitial.value = nextUpvote;
+    upvoteEdit.value = nextUpvote;
+  } catch (error) {
+    console.error("Failed to update upvote count", error);
+    Toast.error("点赞数更新失败");
+    throw error;
+  }
+}
+
 /** 已选标签，双向绑定到 spec.tags */
 const selectedTags = computed({
   get: () => formState.value.spec.tags || [],
@@ -130,9 +172,9 @@ const handlerCreateOrUpdateMoment = async () => {
     saving.value = true;
     stripLegacyTagsFromContent();
     if (isUpdateMode.value) {
-      handleUpdate();
+      await handleUpdate();
     } else {
-      handleSave(formState.value);
+      await handleSave(formState.value);
       handleReset();
     }
   } catch (error) {
@@ -148,9 +190,15 @@ const handleSave = async (moment: Moment) => {
   }
   moment.spec.approved = true;
 
-  await momentsConsoleApiClient.moment.createMoment({
+  const upvoteToSave = normalizeUpvote(upvoteEdit.value);
+
+  const { data: created } = await momentsConsoleApiClient.moment.createMoment({
     moment: moment,
   });
+
+  if (created.metadata?.name && upvoteToSave > 0) {
+    await momentsConsoleApiClient.setUpvote(created.metadata.name, upvoteToSave);
+  }
 
   queryClient.invalidateQueries({ queryKey: ["plugin:moments:console:list"] });
 
@@ -184,22 +232,7 @@ const handleUpdate = async () => {
     ],
   });
 
-  if (upvoteChanged.value) {
-    const nextUpvote = Number.isFinite(upvoteEdit.value)
-      ? Math.max(0, Math.floor(upvoteEdit.value))
-      : 0;
-    try {
-      await momentsConsoleApiClient.setUpvote(
-        formState.value.metadata.name,
-        nextUpvote
-      );
-      upvoteInitial.value = nextUpvote;
-      upvoteEdit.value = nextUpvote;
-    } catch (e) {
-      console.error("Failed to update upvote count", e);
-      Toast.error("点赞数更新失败");
-    }
-  }
+  await persistUpvote(formState.value.metadata.name);
 
   emit("update");
 
@@ -211,6 +244,8 @@ const handleUpdate = async () => {
 const handleReset = () => {
   formState.value = toRaw(cloneDeep(initMoment));
   isEditorEmpty.value = true;
+  upvoteEdit.value = 0;
+  upvoteInitial.value = 0;
 };
 
 const supportImageTypes: string[] = [
@@ -442,7 +477,7 @@ function handleToggleVisible() {
 </script>
 
 <template>
-  <div class=":uno: moment-compose-card shrink overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+  <div class=":uno: moment-compose-card shrink overflow-hidden rounded-lg border border-slate-200 bg-white">
     <AttachmentSelectorModal
       v-model:visible="attachmentSelectorModal"
       v-permission="['system:attachments:view']"
@@ -455,7 +490,7 @@ function handleToggleVisible() {
       v-model:raw="editorRaw"
       v-model:html="editorHtml"
       v-model:isEmpty="isEditorEmpty"
-      class=":uno: min-h-[9rem]"
+      class=":uno: min-h-[5.5rem]"
       tabindex="-1"
       @submit="handlerCreateOrUpdateMoment"
     />
@@ -470,16 +505,16 @@ function handleToggleVisible() {
         </li>
       </ul>
     </div>
-    <div class=":uno: moment-compose-toolbar flex justify-between border-t border-slate-100 bg-slate-50/80 px-4 py-2.5">
-      <div class=":uno: flex flex-wrap items-center gap-2">
+    <div class=":uno: moment-compose-toolbar flex items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/60 px-3 py-1.5">
+      <div class=":uno: flex min-w-0 flex-wrap items-center gap-1.5">
         <button
           type="button"
           aria-label="添加附件"
-          class=":uno: group flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-transparent transition-colors duration-200 hover:border-blue-200 hover:bg-blue-50"
+          class=":uno: group flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded border border-transparent transition-colors hover:border-blue-200 hover:bg-blue-50"
           @click="addMediumVerify() && (attachmentSelectorModal = true)"
         >
           <TablerPhoto
-            class=":uno: size-4 text-slate-500 transition-colors group-hover:text-blue-600"
+            class=":uno: size-3.5 text-slate-500 transition-colors group-hover:text-blue-600"
           />
         </button>
         <DatePicker
@@ -492,38 +527,38 @@ function handleToggleVisible() {
           :shortcuts="releaseTimeShortcuts"
           placeholder="发布日期"
           input-class=":uno: mx-input rounded moment-release-time-input"
-          class=":uno: date-picker release-time-picker max-w-[10rem] cursor-pointer"
+          class=":uno: date-picker release-time-picker max-w-[8.5rem] shrink-0 cursor-pointer"
         />
         <TagSelectDropdown v-model="selectedTags" />
         <div
-          v-if="isUpdateMode"
-          v-tooltip="{ content: '点赞数（可手动修改）' }"
-          class=":uno: upvote-edit inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-600 transition-colors focus-within:border-blue-500 w-40"
+          v-tooltip="{ content: '点赞数（可手动设置）' }"
+          class=":uno: upvote-edit inline-flex h-7 shrink-0 items-center gap-1 rounded border border-slate-200 bg-white px-1.5 text-slate-600 transition-colors focus-within:border-blue-500"
           :class="upvoteChanged ? ':uno: border-blue-500 bg-blue-50' : ''"
         >
           <MingcuteHeartFill
-            class=":uno: text-sm"
+            class=":uno: size-3 shrink-0"
             :class="upvoteChanged ? ':uno: text-red-500' : ':uno: text-slate-400'"
           />
           <input
-            v-model.number="upvoteEdit"
-            type="number"
-            min="0"
-            step="1"
+            v-model="upvoteInput"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]*"
             aria-label="点赞数"
-            class=":uno: w-12 border-0 bg-transparent text-xs outline-none"
+            placeholder="0"
+            class=":uno: upvote-input h-full w-11 min-w-[2.75rem] border-0 bg-transparent p-0 text-center text-xs tabular-nums text-slate-700 outline-none"
             @keydown.stop
           />
         </div>
       </div>
 
-      <div class=":uno: flex items-center gap-2">
+      <div class=":uno: flex shrink-0 items-center gap-1.5">
         <button
           type="button"
           v-tooltip="{
             content: formState.spec.visible === 'PRIVATE' ? `私有访问` : '公开访问',
           }"
-          class=":uno: group flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-transparent transition-colors duration-200"
+          class=":uno: group flex h-7 w-7 cursor-pointer items-center justify-center rounded border border-transparent transition-colors"
           :class="
             formState.spec.visible === 'PRIVATE'
               ? ':uno: hover:border-red-200 hover:bg-red-50'
@@ -533,18 +568,18 @@ function handleToggleVisible() {
         >
           <IconEyeOff
             v-if="formState.spec.visible === 'PRIVATE'"
-            class=":uno: size-4 text-slate-500 transition-colors group-hover:text-red-600"
+            class=":uno: size-3.5 text-slate-500 transition-colors group-hover:text-red-600"
           />
           <IconEye
             v-else
-            class=":uno: size-4 text-slate-500 transition-colors group-hover:text-emerald-600"
+            class=":uno: size-3.5 text-slate-500 transition-colors group-hover:text-emerald-600"
           />
         </button>
 
         <button
           v-if="isUpdateMode"
           type="button"
-          class=":uno: h-8 inline-flex cursor-pointer items-center rounded-lg px-3 text-sm text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+          class=":uno: h-7 inline-flex cursor-pointer items-center rounded px-2 text-xs text-slate-600 transition-colors hover:bg-slate-100"
           @click="handlerCancel"
         >
           取消
@@ -558,12 +593,12 @@ function handleToggleVisible() {
           <VButton
             v-model:disabled="saveDisable"
             :loading="saving"
-            size="sm"
+            size="xs"
             type="primary"
             @click="handlerCreateOrUpdateMoment"
           >
             <template #icon>
-              <SendMoment class=":uno: size-full scale-[1.35]" />
+              <SendMoment class=":uno: size-full scale-[1.2]" />
             </template>
           </VButton>
         </div>

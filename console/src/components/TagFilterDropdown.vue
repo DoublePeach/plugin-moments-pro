@@ -14,9 +14,11 @@ const props = withDefaults(
   defineProps<{
     modelValue?: string;
     label: string;
+    compact?: boolean;
   }>(),
   {
     modelValue: undefined,
+    compact: false,
   }
 );
 
@@ -53,8 +55,13 @@ const handleCloseTag = (event: Event) => {
 <template>
   <VDropdown ref="dropdown" :classes="[':uno: !p-0']" @show="refetch">
     <div
-      class=":uno: group flex h-9 cursor-pointer select-none items-center rounded-lg border border-slate-200 px-3 text-sm text-slate-700 leading-9 transition-colors duration-200 hover:border-slate-300 hover:bg-slate-50"
-      :class="{ ':uno: border-blue-500 bg-blue-50 font-medium text-blue-700': modelValue !== undefined }"
+      class=":uno: group flex cursor-pointer select-none items-center rounded border border-slate-200 text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50"
+      :class="[
+        compact
+          ? ':uno: moment-filter-control h-7 shrink-0 px-2 text-xs leading-none'
+          : ':uno: h-9 px-3 text-sm leading-9',
+        modelValue !== undefined ? ':uno: border-blue-500 bg-blue-50 font-medium text-blue-700' : '',
+      ]"
     >
       <span v-if="!modelValue" class=":uno: mr-0.5">
         {{ label }}

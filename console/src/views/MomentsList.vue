@@ -119,17 +119,19 @@ const {
     selectedSort,
   ],
   queryFn: async () => {
-    const { data } = await momentsConsoleApiClient.moment.listMoments({
-      page: page.value,
-      size: size.value,
-      ownerName: debouncedOwnerName.value || undefined,
-      visible: selectedVisible.value,
-      startDate: startDate.value,
-      endDate: endDate.value,
-      tag: tag.value,
-      sort: selectedSort.value ? [selectedSort.value] : [DEFAULT_SORT],
-      fieldSelector: tag.value ? undefined : ["spec.pinned=false"],
-    });
+    const { data } = await momentsConsoleApiClient.moment.listMoments(
+      {
+        page: page.value,
+        size: size.value,
+        ownerName: debouncedOwnerName.value || undefined,
+        visible: selectedVisible.value,
+        startDate: startDate.value,
+        endDate: endDate.value,
+        tag: tag.value,
+        sort: selectedSort.value ? [selectedSort.value] : [DEFAULT_SORT],
+      },
+      { params: { pinSort: false } }
+    );
 
     total.value = data.total;
     totalPages.value = data.totalPages;
@@ -316,67 +318,63 @@ usePluginShikiScriptLoader();
       </VButton>
     </template>
   </VPageHeader>
-  <VCard class=":uno: m-0 flex-1 bg-slate-50 md:m-4">
-    <div class=":uno: mx-auto max-w-4xl px-4 md:px-6">
-      <div class=":uno: moments-content my-3 flex flex-col space-y-3 md:my-5 md:space-y-4">
+  <VCard class=":uno: moments-page-card m-0 flex-1 md:m-3">
+    <div class=":uno: moments-content mx-auto w-full max-w-5xl px-3 md:px-4">
+      <div class=":uno: my-1 flex flex-col space-y-1 md:my-1.5">
         <section aria-label="发布瞬间">
           <MomentEdit />
         </section>
 
         <section
-          class=":uno: moment-header sticky top-0 z-10 -mx-4 rounded-xl border border-slate-200/80 bg-white/95 px-4 py-3 shadow-sm backdrop-blur md:-mx-6 md:px-6"
+          class=":uno: moment-header sticky top-0 z-10 -mx-3 rounded border border-slate-200 bg-white px-1.5 py-0 md:-mx-4 md:px-2"
           aria-label="筛选与批量操作"
         >
-          <div class=":uno: flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-            <div class=":uno: flex flex-wrap items-center gap-2">
-              <TagFilterDropdown v-model="tag" label="标签" />
-              <FilterDropdown v-model="selectedVisible" label="可见性" :items="visibleItems" />
-              <FilterDropdown v-model="selectedSort" label="排序" :items="sortItems" />
-              <button
-                type="button"
-                class=":uno: inline-flex h-9 cursor-pointer select-none items-center rounded-lg border px-3 text-sm transition-colors duration-200"
-                :class="
-                  selectable
-                    ? ':uno: border-blue-500 bg-blue-50 text-blue-700'
-                    : ':uno: border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                "
-                @click="toggleSelectable"
-              >
-                {{ selectable ? "退出批量" : "批量操作" }}
-              </button>
-            </div>
-
-            <div class=":uno: flex flex-wrap items-center gap-2">
-              <FormKit
-                v-model="ownerName"
-                type="text"
-                placeholder="作者用户名"
-                outer-class=":uno: !mb-0"
-                input-class=":uno: h-9 min-w-[8rem] rounded-lg border border-slate-200 px-3 text-sm transition-colors focus:border-blue-500"
-              />
-              <DatePicker
-                v-model:value="momentsRangeTime"
-                input-class=":uno: mx-input rounded"
-                class=":uno: date-picker range-time max-w-[13rem] cursor-pointer md:max-w-[15rem]"
-                range
-                :editable="false"
-                placeholder="筛选日期范围"
-              />
-            </div>
+          <div class=":uno: moment-filter-bar flex items-center gap-1 overflow-x-auto">
+            <TagFilterDropdown v-model="tag" label="标签" compact />
+            <FilterDropdown v-model="selectedVisible" label="可见性" :items="visibleItems" compact />
+            <FilterDropdown v-model="selectedSort" label="排序" :items="sortItems" compact />
+            <button
+              type="button"
+              class=":uno: moment-filter-control inline-flex h-7 shrink-0 cursor-pointer select-none items-center rounded border px-2 text-xs transition-colors"
+              :class="
+                selectable
+                  ? ':uno: border-blue-500 bg-blue-50 text-blue-700'
+                  : ':uno: border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+              "
+              @click="toggleSelectable"
+            >
+              {{ selectable ? "退出批量" : "批量" }}
+            </button>
+            <div class=":uno: mx-1 hidden h-4 w-px shrink-0 bg-slate-200 sm:block"></div>
+            <FormKit
+              v-model="ownerName"
+              type="text"
+              placeholder="作者"
+              outer-class=":uno: !mb-0 shrink-0"
+              input-class=":uno: moment-filter-input h-7 w-[6.5rem] rounded border border-slate-200 px-2 text-xs"
+            />
+            <DatePicker
+              v-model:value="momentsRangeTime"
+              input-class=":uno: mx-input rounded moment-filter-input"
+              class=":uno: date-picker range-time shrink-0 cursor-pointer"
+              range
+              :editable="false"
+              placeholder="日期范围"
+            />
           </div>
 
           <Transition name="fade">
             <div
               v-if="tag"
-              class=":uno: mt-3 flex items-center justify-between rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800"
+              class=":uno: mt-1 flex items-center justify-between rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-800"
             >
               <span>当前标签：#{{ tag }}</span>
               <button
                 type="button"
-                class=":uno: cursor-pointer text-xs text-blue-600 transition-colors hover:text-blue-800"
+                class=":uno: cursor-pointer text-[11px] text-blue-600 hover:text-blue-800"
                 @click="clearTagFilter"
               >
-                清除筛选
+                清除
               </button>
             </div>
           </Transition>
@@ -384,7 +382,7 @@ usePluginShikiScriptLoader();
           <Transition name="fade">
             <div
               v-if="selectable"
-              class=":uno: mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+              class=":uno: mt-1 flex flex-wrap items-center justify-between gap-1 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs"
             >
               <div class=":uno: flex items-center gap-3">
                 <label class=":uno: inline-flex cursor-pointer items-center gap-2 select-none">
@@ -436,7 +434,7 @@ usePluginShikiScriptLoader();
         <Transition v-else appear name="fade">
           <ul
             v-if="moments && moments.length > 0"
-            class=":uno: box-border flex flex-col space-y-3"
+            class=":uno: box-border flex flex-col space-y-2"
             :class="{ ':uno: opacity-60 pointer-events-none': isFetching }"
             role="list"
           >
@@ -453,12 +451,12 @@ usePluginShikiScriptLoader();
           </ul>
           <template v-else>
             <div
-              class=":uno: flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white py-20 text-slate-500 space-y-3"
+              class=":uno: flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-white py-12 text-slate-500 space-y-2"
             >
-              <MingcuteMomentsLine class=":uno: text-5xl text-slate-300" />
-              <span class=":uno: text-base text-slate-600">暂无瞬间</span>
+              <MingcuteMomentsLine class=":uno: text-4xl text-slate-300" />
+              <span class=":uno: text-sm text-slate-600">暂无瞬间</span>
               <span class=":uno: text-xs text-slate-400">
-                可以在顶部编辑器直接发布第一条瞬间
+                可在顶部编辑器发布第一条瞬间
               </span>
             </div>
           </template>

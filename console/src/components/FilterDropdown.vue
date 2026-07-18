@@ -10,9 +10,11 @@ const props = withDefaults(
     }[];
     label: string;
     modelValue?: string | boolean | number;
+    compact?: boolean;
   }>(),
   {
     modelValue: undefined,
+    compact: false,
   }
 );
 
@@ -41,10 +43,13 @@ const handleClear = (event: Event) => {
 <template>
   <VDropdown>
     <div
-      class=":uno: group flex cursor-pointer select-none items-center border rounded-lg px-3 text-sm text-gray-700 leading-9 hover:text-black"
-      :class="{
-        ':uno: font-semibold text-gray-700': modelValue !== undefined,
-      }"
+      class=":uno: group flex cursor-pointer select-none items-center border rounded-lg text-gray-700 hover:text-black"
+      :class="[
+        compact
+          ? ':uno: moment-filter-control h-7 shrink-0 px-2 text-xs leading-none'
+          : ':uno: px-3 text-sm leading-9',
+        modelValue !== undefined ? ':uno: font-semibold text-gray-700' : '',
+      ]"
     >
       <span v-if="!selectedItem" class=":uno: mr-0.5">
         {{ label }}

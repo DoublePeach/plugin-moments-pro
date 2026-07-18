@@ -8,16 +8,16 @@ spec:
   enabled: true
   requires: ">=2.22.0"
   author:
-    name: Halo
-    website: https://github.com/halo-dev
+    name: Tovin
+    website: https://blog.tovin.xyz
   logo: logo.svg
   configMapName: plugin-moments-configmap
   settingName: plugin-moments-settings
-  homepage: https://www.halo.run/store/apps/app-SnwWD
+  homepage: https://blog.tovin.xyz
   repo: https://github.com/halo-sigs/plugin-moments
   issues: https://github.com/halo-sigs/plugin-moments/issues
   displayName: "瞬间"
-  description: "Halo 2.0 的瞬间管理插件，提供一个轻量级的内容发布功能，支持发布图文、视频、音频等内容。"
+  description: "Halo 2.x 瞬间管理插件 v3.0：轻量图文动态发布，后台标签下拉管理、置顶、批量操作、点赞数初始化；前台不展示标签，专注内容时间线体验。"
   pluginDependencies:
     "PluginFeed?": ">=1.4.0"
   license:

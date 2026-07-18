@@ -135,7 +135,7 @@ function clearAllTags(event: Event) {
 <template>
   <VDropdown ref="dropdown" :classes="[':uno: !p-0']" @show="refetch">
     <div
-      class=":uno: tag-select-trigger group flex h-7 min-w-[6.5rem] max-w-[12rem] cursor-pointer select-none items-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-600 transition-colors duration-200 hover:border-blue-500 hover:text-slate-900"
+      class=":uno: tag-select-trigger group flex h-7 min-w-[5rem] max-w-[9rem] shrink-0 cursor-pointer select-none items-center gap-1 rounded border border-slate-200 bg-white px-1.5 text-[11px] text-slate-600 transition-colors duration-150 hover:border-blue-500 hover:text-slate-900"
       :class="{ ':uno: border-blue-500 bg-blue-50/60 text-blue-700': modelValue.length > 0 }"
       role="button"
       :aria-label="`${label}选择`"

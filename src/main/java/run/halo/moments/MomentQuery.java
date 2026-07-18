@@ -81,6 +81,15 @@ public class MomentQuery extends SortableRequest {
         return convertBooleanOrNull(queryParams.getFirst("pinned"));
     }
 
+    @Schema(description = "Whether pinned moments are sorted to the top. Default true.")
+    public boolean isPinSortEnabled() {
+        String pinSort = queryParams.getFirst("pinSort");
+        if (StringUtils.isBlank(pinSort)) {
+            return true;
+        }
+        return Boolean.parseBoolean(pinSort);
+    }
+
     @Schema
     public Instant getStartDate() {
         String startDate = queryParams.getFirst("startDate");
@@ -142,13 +151,15 @@ public class MomentQuery extends SortableRequest {
         if (sort.isUnsorted()) {
             sort = Sort.by("spec.releaseTime").descending();
         }
-        // Pinned moments always float to the top, followed by custom pinOrder desc,
-        // then the user-specified or default sort.
-        var pinnedSort = Sort.by(
-            Sort.Order.desc("spec.pinned"),
-            Sort.Order.desc("spec.pinOrder")
-        );
-        return PageRequestImpl.of(getPage(), getSize(), pinnedSort.and(sort));
+        if (isPinSortEnabled()) {
+            // Pinned moments float to the top on public listings.
+            var pinnedSort = Sort.by(
+                Sort.Order.desc("spec.pinned"),
+                Sort.Order.desc("spec.pinOrder")
+            );
+            return PageRequestImpl.of(getPage(), getSize(), pinnedSort.and(sort));
+        }
+        return PageRequestImpl.of(getPage(), getSize(), sort);
     }
 
     @Schema(description = "moment approved.")
@@ -213,6 +224,12 @@ public class MomentQuery extends SortableRequest {
                 .in(ParameterIn.QUERY)
                 .name("pinned")
                 .description("Whether the moment is pinned. Omit to fetch all.")
+                .implementation(Boolean.class)
+                .required(false))
+            .parameter(parameterBuilder()
+                .in(ParameterIn.QUERY)
+                .name("pinSort")
+                .description("Whether pinned moments are sorted to the top. Default true.")
                 .implementation(Boolean.class)
                 .required(false))
         ;
