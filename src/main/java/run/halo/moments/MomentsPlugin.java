@@ -41,6 +41,22 @@ public class MomentsPlugin extends BasePlugin {
                 .setName("spec.owner")
                 .setIndexFunc(
                     simpleAttribute(Moment.class, moment -> moment.getSpec().getOwner())));
+            // Index plain text extracted from content so console keyword search can
+            // fuzzy-match body text without being polluted by HTML tags.
+            indexSpecs.add(new IndexSpec()
+                .setName("spec.content.raw")
+                .setIndexFunc(simpleAttribute(Moment.class, moment -> {
+                    var content = moment.getSpec().getContent();
+                    if (content == null) {
+                        return null;
+                    }
+                    var source = content.getRaw() != null ? content.getRaw() : content.getHtml();
+                    if (source == null) {
+                        return null;
+                    }
+                    return source.replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim();
+                }))
+            );
             indexSpecs.add(new IndexSpec()
                 .setName("spec.releaseTime")
                 .setIndexFunc(simpleAttribute(Moment.class, moment -> {

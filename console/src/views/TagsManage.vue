@@ -3,6 +3,7 @@ import { momentsConsoleApiClient } from "@/api";
 import type { MomentTagVo } from "@/types";
 import {
   Dialog,
+  IconAddCircle,
   Toast,
   VButton,
   VCard,
@@ -39,6 +40,44 @@ const {
   refetchOnWindowFocus: false,
 });
 
+/** Invalidate every query that depends on the tag catalog. */
+function invalidateTagQueries() {
+  queryClient.invalidateQueries({ queryKey: ["plugin:moments:console:list"] });
+  queryClient.invalidateQueries({ queryKey: ["moments-tags"] });
+  queryClient.invalidateQueries({ queryKey: ["plugin:moments:tag-stats"] });
+}
+
+// --- create ---
+const createModalVisible = ref(false);
+const creating = ref(false);
+const createValue = ref("");
+
+function openCreateModal() {
+  createValue.value = "";
+  createModalVisible.value = true;
+}
+
+async function handleCreate() {
+  const name = createValue.value.trim().replace(/^#+/, "");
+  if (!name) {
+    Toast.warning("请输入标签名称");
+    return;
+  }
+  creating.value = true;
+  try {
+    await momentsConsoleApiClient.createTag(name);
+    Toast.success(`已创建标签「${name}」`);
+    createModalVisible.value = false;
+    await refetch();
+    invalidateTagQueries();
+  } catch (error) {
+    console.error(error);
+  } finally {
+    creating.value = false;
+  }
+}
+
+// --- rename ---
 const renameModalVisible = ref(false);
 const renaming = ref(false);
 const renameTarget = ref<MomentTagVo | null>(null);
@@ -55,7 +94,7 @@ async function handleRename() {
     return;
   }
   const oldName = renameTarget.value.name;
-  const newName = renameValue.value.trim();
+  const newName = renameValue.value.trim().replace(/^#+/, "");
   if (!newName) {
     Toast.warning("请输入新标签名称");
     return;
@@ -69,13 +108,14 @@ async function handleRename() {
     const { data } = await momentsConsoleApiClient.renameTag(oldName, newName);
     if (data.failed > 0) {
       Toast.warning(`已更新 ${data.affected} 条，${data.failed} 条失败`);
+    } else if (data.affected === 0) {
+      Toast.success(`已重命名标签「${oldName}」→「${newName}」`);
     } else {
       Toast.success(`已重命名 ${data.affected} 条瞬间中的标签`);
     }
     renameModalVisible.value = false;
     await refetch();
-    queryClient.invalidateQueries({ queryKey: ["plugin:moments:console:list"] });
-    queryClient.invalidateQueries({ queryKey: ["moments-tags"] });
+    invalidateTagQueries();
   } catch (error) {
     console.error(error);
   } finally {
@@ -83,22 +123,28 @@ async function handleRename() {
   }
 }
 
+// --- delete ---
 function handleDelete(tag: MomentTagVo) {
+  const countText =
+    tag.momentCount > 0
+      ? `将从 ${tag.momentCount} 条瞬间中移除该标签，此操作不可恢复。`
+      : "该标签当前未被任何瞬间使用，删除后将从标签库中移除。";
   Dialog.warning({
     title: `确定要删除标签「${tag.name}」吗？`,
-    description: `将从 ${tag.momentCount} 条瞬间中移除该标签，此操作不可恢复。`,
+    description: countText,
     confirmType: "danger",
     onConfirm: async () => {
       try {
         const { data } = await momentsConsoleApiClient.deleteTag(tag.name);
         if (data.failed > 0) {
           Toast.warning(`已更新 ${data.affected} 条，${data.failed} 条失败`);
+        } else if (data.affected === 0) {
+          Toast.success(`已删除标签「${tag.name}」`);
         } else {
           Toast.success(`已从 ${data.affected} 条瞬间中删除标签`);
         }
         await refetch();
-        queryClient.invalidateQueries({ queryKey: ["plugin:moments:console:list"] });
-        queryClient.invalidateQueries({ queryKey: ["moments-tags"] });
+        invalidateTagQueries();
       } catch (error) {
         console.error(error);
       }
@@ -121,6 +167,12 @@ function handleBack() {
       <MingcuteTag2Line />
     </template>
     <template #actions>
+      <VButton v-permission="['plugin:moments:manage']" type="primary" @click="openCreateModal">
+        <template #icon>
+          <IconAddCircle class=":uno: size-full" />
+        </template>
+        新增标签
+      </VButton>
       <VButton @click="handleBack">
         <template #icon>
           <MingcuteArrowLeftLine class=":uno: size-full" />
@@ -147,8 +199,18 @@ function handleBack() {
       <VEmpty
         v-else-if="!tags || tags.length === 0"
         title="暂无标签"
-        message="发布瞬间时选择标签后，会出现在这里。"
-      />
+        message="点击右上角「新增标签」创建，或在发布瞬间时选择标签。"
+      >
+        <template #actions>
+          <VButton
+            v-permission="['plugin:moments:manage']"
+            type="primary"
+            @click="openCreateModal"
+          >
+            新增标签
+          </VButton>
+        </template>
+      </VEmpty>
 
       <div v-else class=":uno: overflow-hidden rounded-lg border">
         <table class=":uno: w-full text-left text-sm">
@@ -162,10 +224,24 @@ function handleBack() {
           <tbody class=":uno: divide-y divide-gray-100">
             <tr v-for="tag in tags" :key="tag.name" class=":uno: bg-white hover:bg-gray-50">
               <td class=":uno: px-4 py-3 font-medium">{{ tag.name }}</td>
-              <td class=":uno: px-4 py-3 text-gray-600">{{ tag.momentCount }}</td>
+              <td class=":uno: px-4 py-3 text-gray-600">
+                <span
+                  :class="
+                    tag.momentCount === 0 ? ':uno: text-gray-400' : ':uno: text-gray-600'
+                  "
+                >
+                  {{ tag.momentCount }}
+                </span>
+              </td>
               <td class=":uno: px-4 py-3">
                 <div class=":uno: flex items-center justify-end gap-2">
-                  <VButton size="sm" @click="handleView(tag)">查看瞬间</VButton>
+                  <VButton
+                    size="sm"
+                    :disabled="tag.momentCount === 0"
+                    @click="handleView(tag)"
+                  >
+                    查看瞬间
+                  </VButton>
                   <VButton
                     v-permission="['plugin:moments:manage']"
                     size="sm"
@@ -191,6 +267,30 @@ function handleBack() {
   </VCard>
 
   <VModal
+    v-model:visible="createModalVisible"
+    title="新增标签"
+    :width="420"
+    @close="createModalVisible = false"
+  >
+    <FormKit
+      v-model="createValue"
+      type="text"
+      label="标签名称"
+      placeholder="例如：工作笔记"
+      validation="required"
+      outer-class=":uno: !mb-0"
+      @keydown.enter.prevent="handleCreate"
+    />
+    <p class=":uno: mt-2 text-xs text-gray-500">
+      新建的标签会进入标签库，可在发布瞬间时直接选择；当前瞬间数量为 0。
+    </p>
+    <template #footer>
+      <VButton type="secondary" @click="createModalVisible = false">取消</VButton>
+      <VButton type="primary" :loading="creating" @click="handleCreate">创建</VButton>
+    </template>
+  </VModal>
+
+  <VModal
     v-model:visible="renameModalVisible"
     title="重命名标签"
     :width="420"
@@ -202,6 +302,7 @@ function handleBack() {
       label="新标签名称"
       validation="required"
       outer-class=":uno: !mb-0"
+      @keydown.enter.prevent="handleRename"
     />
     <template #footer>
       <VButton type="secondary" @click="renameModalVisible = false">取消</VButton>

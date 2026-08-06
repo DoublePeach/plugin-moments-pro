@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { momentsConsoleApiClient } from "@/api";
 import { useConsoleTagQueryFetch, useUCTagQueryFetch } from "@/composables/use-tag";
 import {
   IconArrowDown,
@@ -8,8 +9,11 @@ import {
   VEntityContainer,
   VEntityField,
 } from "@halo-dev/components";
+import { useQueryClient } from "@tanstack/vue-query";
 import { computed, ref } from "vue";
 import MingcuteTag2Line from "~icons/mingcute/tag-2-line";
+
+const queryClient = useQueryClient();
 
 /**
  * 发布表单标签多选下拉组件，支持模糊搜索与新建标签。
@@ -112,11 +116,21 @@ function toggleTag(tagName: string) {
 
 /**
  * 通过搜索关键词创建并选中标签。
+ * Console 范围会同步写入标签库，保证标签管理页也能看到。
  */
-function createTagFromKeyword() {
+async function createTagFromKeyword() {
   const value = normalizeTagName(keyword.value || "");
   if (!value || !canCreateTag.value) {
     return;
+  }
+  if (props.scope === "console") {
+    try {
+      await momentsConsoleApiClient.createTag(value);
+      queryClient.invalidateQueries({ queryKey: ["moments-tags"] });
+      queryClient.invalidateQueries({ queryKey: ["plugin:moments:tag-stats"] });
+    } catch {
+      // 标签可能已存在于库中或无创建权限，本地选中仍然继续。
+    }
   }
   const next = new Set(props.modelValue);
   next.add(value);

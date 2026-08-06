@@ -59,6 +59,10 @@ const momentsConsoleApiClient = {
       params: name ? { name } : undefined,
     });
   },
+  /** Create a predefined tag in the tag dictionary. */
+  createTag(name: string) {
+    return axiosInstance.post<MomentTagVo>(`${CONSOLE_API_BASE}/tags`, { name });
+  },
   /** Rename a tag across all related moments. */
   renameTag(oldName: string, newName: string) {
     return axiosInstance.post<TagMutationResult>(`${CONSOLE_API_BASE}/tags/-/rename`, {

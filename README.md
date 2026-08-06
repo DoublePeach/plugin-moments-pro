@@ -50,7 +50,7 @@
 
 ### 安装
 
-1. 下载 `plugin-moments-3.0.0.jar`（Release 或自行构建）
+1. 下载 `plugin-moments-3.0.1.jar`（Release 或自行构建）
 2. Halo 后台 → **插件** → 上传安装 → 启用
 3. 左侧菜单出现 **瞬间**，即可管理
 4. 前台访问 `/moments`（需主题提供 `moments.html` 模板）
@@ -83,7 +83,7 @@ cd plugin-moments
 
 ```bash
 ./gradlew build
-# 产物：build/libs/plugin-moments-3.0.0.jar
+# 产物：build/libs/plugin-moments-3.0.1.jar
 ```
 
 开发文档：<https://docs.halo.run/developer-guide/plugin/introduction>
@@ -143,6 +143,11 @@ cd plugin-moments
 
 ## 📝 更新日志
 
+### v3.0.1
+
+- 列表支持按瞬间内容模糊搜索
+- 标签管理支持新增标签（ConfigMap 字典，无瞬间引用也可保留）
+- 创建/重命名/删除标签与字典及瞬间内容联动同步
 ### v3.0.0
 
 - 标签改为下拉选择，移除正文 `#` 输入

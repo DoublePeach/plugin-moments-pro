@@ -51,7 +51,7 @@ public class MomentQuery extends SortableRequest {
     }
 
     @Nullable
-    @Schema(description = "Moments filtered by keyword.")
+    @Schema(description = "Fuzzy match against moment content text.")
     public String getKeyword() {
         return StringUtils.defaultIfBlank(queryParams.getFirst("keyword"), null);
     }
@@ -139,8 +139,9 @@ public class MomentQuery extends SortableRequest {
         if (listOptions.getFieldSelector() != null) {
             query = and(query, listOptions.getFieldSelector().query());
         }
+        // keyword is used for content fuzzy matching (owner has its own ownerName filter).
         if (StringUtils.isNotBlank(getKeyword())) {
-            query = and(query, contains("spec.owner", getKeyword()));
+            query = and(query, contains("spec.content.raw", getKeyword()));
         }
         listOptions.setFieldSelector(FieldSelector.of(query));
         return listOptions;
@@ -181,7 +182,7 @@ public class MomentQuery extends SortableRequest {
             .parameter(parameterBuilder()
                 .in(ParameterIn.QUERY)
                 .name("keyword")
-                .description("Moments filtered by keyword.")
+                .description("Fuzzy match against moment content text.")
                 .implementation(String.class)
                 .required(false))
             .parameter(parameterBuilder()

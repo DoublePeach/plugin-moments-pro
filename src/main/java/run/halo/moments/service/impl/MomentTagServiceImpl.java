@@ -1,12 +1,13 @@
 package run.halo.moments.service.impl;
 
-import static run.halo.app.extension.index.query.QueryFactory.all;
 import static run.halo.app.extension.index.query.QueryFactory.equal;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -14,8 +15,8 @@ import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
+import org.springframework.web.server.ServerWebInputException;
 import org.springframework.web.util.UriUtils;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import run.halo.app.extension.ListOptions;
 import run.halo.app.extension.ReactiveExtensionClient;
@@ -29,54 +30,111 @@ import run.halo.moments.vo.TagMutationResult;
 
 /**
  * Default implementation for {@link MomentTagService}.
+ *
+ * <p>Tags live on {@code Moment.spec.tags}. A ConfigMap-backed dictionary also
+ * keeps predefined tags that may temporarily have zero moments, so the tag
+ * management page can support create / rename / delete as a complete CRUD.
  */
 @Component
 @RequiredArgsConstructor
 public class MomentTagServiceImpl implements MomentTagService {
 
     private final ReactiveExtensionClient client;
+    private final MomentTagDictionary tagDictionary;
 
     @Override
     public Mono<List<MomentTagVo>> listTagStats(MomentQuery query) {
-        return client.listAll(Moment.class, query.toListOptions(),
-                Sort.by("metadata.name").descending())
-            .flatMapIterable(moment -> {
+        Mono<Map<String, Integer>> usageMono = client
+            .listAll(Moment.class, query.toListOptions(), Sort.by("metadata.name").descending())
+            .reduce(new HashMap<String, Integer>(), (counts, moment) -> {
                 var tags = moment.getSpec().getTags();
-                if (tags == null || tags.isEmpty()) {
-                    return List.<TagMomentPair>of();
+                if (tags != null) {
+                    for (String tag : tags) {
+                        if (StringUtils.isNotBlank(tag)) {
+                            counts.merge(tag, 1, Integer::sum);
+                        }
+                    }
                 }
-                return tags.stream()
-                    .map(tag -> new TagMomentPair(tag, moment.getMetadata().getName()))
+                return counts;
+            });
+
+        return Mono.zip(usageMono, tagDictionary.list())
+            .map(tuple -> {
+                Map<String, Integer> usage = tuple.getT1();
+                Set<String> dictionary = tuple.getT2();
+                Map<String, MomentTagVo> merged = new HashMap<>();
+                usage.forEach((name, count) -> merged.put(name, MomentTagVo.builder()
+                    .name(name)
+                    .momentCount(count)
+                    .permalink(buildConsoleTagPermalink(name))
+                    .build()));
+                for (String name : dictionary) {
+                    merged.putIfAbsent(name, MomentTagVo.builder()
+                        .name(name)
+                        .momentCount(0)
+                        .permalink(buildConsoleTagPermalink(name))
+                        .build());
+                }
+                return merged.values().stream()
+                    .sorted(Comparator
+                        .comparing(MomentTagVo::getMomentCount, Comparator.reverseOrder())
+                        .thenComparing(MomentTagVo::getName, String.CASE_INSENSITIVE_ORDER))
                     .toList();
-            })
-            .groupBy(TagMomentPair::tagName)
-            .flatMap(groupedFlux -> groupedFlux.count()
-                .defaultIfEmpty(0L)
-                .map(count -> MomentTagVo.builder()
-                    .name(groupedFlux.key())
-                    .momentCount(count.intValue())
-                    .permalink(buildConsoleTagPermalink(groupedFlux.key()))
-                    .build()))
-            .collectList();
+            });
+    }
+
+    @Override
+    public Mono<MomentTagVo> createTag(String name) {
+        var normalized = normalize(name);
+        if (normalized == null) {
+            return Mono.error(new ServerWebInputException("标签名称不能为空"));
+        }
+        // Reject when the tag already exists either in dictionary or on any moment.
+        var usedOptions = new ListOptions();
+        usedOptions.setFieldSelector(FieldSelector.of(equal("spec.tags", normalized)));
+        Mono<Boolean> usedOnMoments = client
+            .listAll(Moment.class, usedOptions, Sort.unsorted())
+            .hasElements();
+        return Mono.zip(tagDictionary.list(), usedOnMoments)
+            .flatMap(tuple -> {
+                boolean inDictionary = tuple.getT1().stream()
+                    .anyMatch(tag -> tag.equalsIgnoreCase(normalized));
+                if (inDictionary || Boolean.TRUE.equals(tuple.getT2())) {
+                    return Mono.error(new ServerWebInputException("标签已存在：" + normalized));
+                }
+                return tagDictionary.add(normalized)
+                    .thenReturn(MomentTagVo.builder()
+                        .name(normalized)
+                        .momentCount(0)
+                        .permalink(buildConsoleTagPermalink(normalized))
+                        .build());
+            });
     }
 
     @Override
     public Mono<TagMutationResult> renameTag(String oldName, String newName) {
-        if (StringUtils.isAnyBlank(oldName, newName)) {
+        var oldNormalized = normalize(oldName);
+        var newNormalized = normalize(newName);
+        if (oldNormalized == null || newNormalized == null) {
             return Mono.just(TagMutationResult.builder().build());
         }
-        if (StringUtils.equals(oldName, newName)) {
+        if (StringUtils.equals(oldNormalized, newNormalized)) {
             return Mono.just(TagMutationResult.builder().build());
         }
-        return mutateMomentsWithTag(oldName, moment -> applyRename(moment, oldName, newName));
+        return mutateMomentsWithTag(oldNormalized,
+            moment -> applyRename(moment, oldNormalized, newNormalized))
+            .flatMap(result -> tagDictionary.rename(oldNormalized, newNormalized)
+                .thenReturn(result));
     }
 
     @Override
     public Mono<TagMutationResult> deleteTag(String name) {
-        if (StringUtils.isBlank(name)) {
+        var normalized = normalize(name);
+        if (normalized == null) {
             return Mono.just(TagMutationResult.builder().build());
         }
-        return mutateMomentsWithTag(name, moment -> applyDelete(moment, name));
+        return mutateMomentsWithTag(normalized, moment -> applyDelete(moment, normalized))
+            .flatMap(result -> tagDictionary.remove(normalized).thenReturn(result));
     }
 
     private Mono<TagMutationResult> mutateMomentsWithTag(String tagName,
@@ -136,6 +194,11 @@ public class MomentTagServiceImpl implements MomentTagService {
             StandardCharsets.UTF_8);
     }
 
-    private record TagMomentPair(String tagName, String momentName) {
+    private String normalize(String tagName) {
+        if (tagName == null) {
+            return null;
+        }
+        var trimmed = tagName.trim().replaceAll("^#+", "");
+        return StringUtils.isBlank(trimmed) ? null : trimmed;
     }
 }

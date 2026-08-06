@@ -37,6 +37,7 @@ import run.halo.moments.util.MeterUtils;
 public class MomentServiceImpl implements MomentService {
 
     private final ReactiveExtensionClient client;
+    private final MomentTagDictionary tagDictionary;
 
     @Override
     public Mono<ListResult<ListedMoment>> listMoment(MomentQuery query) {
@@ -69,13 +70,16 @@ public class MomentServiceImpl implements MomentService {
 
     @Override
     public Flux<String> listAllTags(MomentQuery query) {
-        return client.listAll(Moment.class, query.toListOptions(),
+        Flux<String> usedTags = client.listAll(Moment.class, query.toListOptions(),
                 Sort.by("metadata.name").descending())
             .flatMapIterable(moment -> {
                 var tags = moment.getSpec().getTags();
                 return Objects.requireNonNullElseGet(tags, List::of);
-            })
-            .distinct();
+            });
+        // Merge dictionary tags so newly created (unused) tags appear in selectors.
+        Flux<String> dictionaryTags = tagDictionary.list()
+            .flatMapMany(Flux::fromIterable);
+        return Flux.concat(usedTags, dictionaryTags).distinct();
     }
 
     @Override

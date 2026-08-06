@@ -97,6 +97,20 @@ public class MomentEndpoint implements CustomEndpoint {
                     .response(responseBuilder()
                         .implementationArray(MomentTagVo.class)
                     ))
+            .POST("tags", this::createTag,
+                builder -> builder.operationId("CreateMomentTag")
+                    .description("Create a predefined moment tag in the tag dictionary.")
+                    .tag(tag)
+                    .requestBody(requestBodyBuilder()
+                        .required(true)
+                        .content(contentBuilder()
+                            .mediaType(MediaType.APPLICATION_JSON_VALUE)
+                            .schema(Builder.schemaBuilder()
+                                .implementation(CreateTagRequest.class))
+                        ))
+                    .response(responseBuilder()
+                        .implementation(MomentTagVo.class))
+            )
             .POST("tags/-/rename", this::renameTag,
                 builder -> builder.operationId("RenameMomentTag")
                     .description("Rename a moment tag across all related moments.")
@@ -272,6 +286,12 @@ public class MomentEndpoint implements CustomEndpoint {
             .flatMap(result -> ServerResponse.ok().bodyValue(result));
     }
 
+    private Mono<ServerResponse> createTag(ServerRequest request) {
+        return request.bodyToMono(CreateTagRequest.class)
+            .flatMap(body -> momentTagService.createTag(body.getName()))
+            .flatMap(result -> ServerResponse.ok().bodyValue(result));
+    }
+
     private Mono<ServerResponse> renameTag(ServerRequest request) {
         return request.bodyToMono(RenameTagRequest.class)
             .flatMap(body -> momentTagService.renameTag(body.getOldName(), body.getNewName()))
@@ -332,6 +352,11 @@ public class MomentEndpoint implements CustomEndpoint {
     public static class VisibleBatchRequest {
         private List<String> names;
         private Moment.MomentVisible visible;
+    }
+
+    @Data
+    public static class CreateTagRequest {
+        private String name;
     }
 
     @Data

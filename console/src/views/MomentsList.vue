@@ -38,6 +38,9 @@ const tag = useRouteQuery<string | undefined>("tag");
 const selectedVisible = useRouteQuery<"PUBLIC" | "PRIVATE" | undefined>("visible");
 const ownerName = useRouteQuery<string | undefined>("ownerName");
 const debouncedOwnerName = refDebounced(ownerName, 300);
+/** Content fuzzy-match keyword in the filter bar. */
+const keyword = useRouteQuery<string | undefined>("keyword");
+const debouncedKeyword = refDebounced(keyword, 300);
 
 const page = ref(1);
 const size = ref(20);
@@ -113,6 +116,7 @@ const {
     size,
     selectedVisible,
     debouncedOwnerName,
+    debouncedKeyword,
     startDate,
     endDate,
     tag,
@@ -124,6 +128,7 @@ const {
         page: page.value,
         size: size.value,
         ownerName: debouncedOwnerName.value || undefined,
+        keyword: debouncedKeyword.value || undefined,
         visible: selectedVisible.value,
         startDate: startDate.value,
         endDate: endDate.value,
@@ -180,7 +185,7 @@ provide("tag", {
 });
 
 watch(
-  [tag, selectedVisible, debouncedOwnerName, momentsRangeTime, selectedSort],
+  [tag, selectedVisible, debouncedOwnerName, debouncedKeyword, momentsRangeTime, selectedSort],
   () => {
     page.value = 1;
     size.value = 20;
@@ -360,6 +365,13 @@ usePluginShikiScriptLoader();
               range
               :editable="false"
               placeholder="日期范围"
+            />
+            <FormKit
+              v-model="keyword"
+              type="search"
+              placeholder="搜索内容"
+              outer-class=":uno: !mb-0 shrink-0"
+              input-class=":uno: moment-filter-input h-7 w-[9rem] rounded border border-slate-200 px-2 text-xs md:w-[11rem]"
             />
           </div>
 
